@@ -52,7 +52,7 @@ Chromium is installed via Playwright on `npm install`. Headed mode is the defaul
 2. Paste apply URLs into the queue (newline-separated).
 3. **Run next** or **Fill** on a row. A Chromium window opens and fills the form.
 4. Review the mapped-field checklist (green filled / amber guessed / red blocked).
-5. Blocked questions are copied into **Unanswered** (and empty keys in `data/answers.yml`). Fill them there once; later jobs reuse the answers.
+5. Blocked questions are copied into **Unanswered** (and empty keys in `data/answers.yml`). Dropdowns include the form's option list — click the exact choice. Fill them once; later jobs reuse the answers.
 6. Click Submit yourself in the browser.
 7. Failed runs keep a screenshot under `data/screenshots/`.
 

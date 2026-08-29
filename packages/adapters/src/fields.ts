@@ -1,5 +1,5 @@
 import type { Locator, Page } from "playwright";
-import { fuzzyScore, lookupValue, type AnswerBank, type Profile } from "@job9k/core";
+import { fuzzyScore, lookupValue, mergeChoices, type AnswerBank, type Profile } from "@job9k/core";
 import type { AdapterContext, FieldOutcome } from "./types.js";
 
 const OPTION_SELECTORS = [
@@ -47,6 +47,108 @@ export async function fieldDescriptor(page: Page, loc: Locator): Promise<string>
   }).catch(() => "");
   if (nearby) parts.push(nearby);
   return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function uniqueChoices(raw: string[]): string[] {
+  return mergeChoices([], raw);
+}
+
+export async function readNativeSelectChoices(loc: Locator): Promise<string[]> {
+  const raw = await loc
+    .evaluate((el) => {
+      if (!(el instanceof HTMLSelectElement)) return [];
+      return [...el.options].map((o) => (o.textContent || o.label || o.value || "").trim());
+    })
+    .catch(() => [] as string[]);
+  return uniqueChoices(raw);
+}
+
+async function readGroupedInputChoices(page: Page, loc: Locator): Promise<string[]> {
+  const name = await loc.getAttribute("name");
+  const type = ((await loc.getAttribute("type")) ?? "radio").toLowerCase();
+  if (!name) return [];
+  const inputs = page.locator(`input[type="${type}"][name="${name.replace(/"/g, '\\"')}"]`);
+  const n = Math.min(await inputs.count().catch(() => 0), 80);
+  const raw: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const el = inputs.nth(i);
+    const value = (await el.getAttribute("value").catch(() => "")) ?? "";
+    const id = await el.getAttribute("id");
+    let label = "";
+    if (id) {
+      label = ((await page.locator(`label[for="${id}"]`).first().textContent().catch(() => "")) ?? "").trim();
+    }
+    if (!label) {
+      label = await el
+        .evaluate((node) => {
+          const lab = node.closest("label") || node.parentElement;
+          return lab?.textContent?.trim() ?? "";
+        })
+        .catch(() => "");
+    }
+    raw.push(label || value);
+  }
+  return uniqueChoices(raw);
+}
+
+export async function readOpenListChoices(page: Page, loc: Locator): Promise<string[]> {
+  await loc.scrollIntoViewIfNeeded().catch(() => undefined);
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await loc.click({ timeout: 2500 }).catch(() => undefined);
+  await sleep(280);
+  const listId = await loc.getAttribute("aria-controls");
+  const safeId = listId ? listId.replace(/([^\w-])/g, "\\$1") : "";
+  const scoped = safeId
+    ? page.locator(`#${safeId} [role="option"], #${safeId} li`)
+    : page.locator(OPTION_SELECTORS);
+  const count = Math.min(await scoped.count().catch(() => 0), 250);
+  const raw: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const opt = scoped.nth(i);
+    if (!(await opt.isVisible().catch(() => false))) continue;
+    raw.push(((await opt.textContent()) ?? "").trim());
+  }
+  await page.keyboard.press("Escape").catch(() => undefined);
+  return uniqueChoices(raw);
+}
+
+export async function readFieldChoices(page: Page, loc: Locator): Promise<string[]> {
+  const tag = await loc.evaluate((el) => el.tagName.toLowerCase()).catch(() => "input");
+  const type = ((await loc.getAttribute("type")) ?? "").toLowerCase();
+  const role = ((await loc.getAttribute("role")) ?? "").toLowerCase();
+  const aria = await loc.getAttribute("aria-haspopup");
+  const expanded = await loc.getAttribute("aria-expanded");
+
+  if (tag === "select") return readNativeSelectChoices(loc);
+  if (type === "radio" || type === "checkbox") return readGroupedInputChoices(page, loc);
+  if (role === "combobox" || aria === "listbox" || aria === "true" || expanded !== null) {
+    return readOpenListChoices(page, loc);
+  }
+
+  const nested = loc.locator("select").first();
+  if ((await nested.count().catch(() => 0)) > 0) return readNativeSelectChoices(nested);
+
+  const nearby = loc.locator("xpath=ancestor::*[self::div or self::fieldset or self::label][1]//select").first();
+  if ((await nearby.count().catch(() => 0)) > 0) return readNativeSelectChoices(nearby);
+
+  return [];
+}
+
+export async function blockedOutcome(
+  page: Page,
+  loc: Locator,
+  label: string,
+  required: boolean,
+  extraChoices: string[] = [],
+): Promise<FieldOutcome> {
+  const scraped = await readFieldChoices(page, loc).catch(() => [] as string[]);
+  return {
+    label,
+    value: "",
+    confidence: "blocked",
+    required,
+    choices: mergeChoices(extraChoices, scraped),
+  };
 }
 
 export async function handleNativeSelect(loc: Locator, value: string): Promise<boolean> {
@@ -136,14 +238,14 @@ export async function fillByLookup(
       const decision = await ctx.onUnknownQuestion(label, "");
       if (decision === "skip-job") throw new SkipJobError(label);
       if (decision === "leave") {
-        const outcome: FieldOutcome = { label, value: "", confidence: "blocked", required: true };
+        const outcome = await blockedOutcome(ctx.page, loc, label, true, kind === "yesno" ? ["Yes", "No"] : []);
         ctx.onField(outcome);
         return outcome;
       }
       mapped.value = decision.value;
       mapped.confidence = "filled";
     } else {
-      const outcome: FieldOutcome = { label, value: "", confidence: "blocked", required: false };
+      const outcome = await blockedOutcome(ctx.page, loc, label, false, kind === "yesno" ? ["Yes", "No"] : []);
       ctx.onField(outcome);
       return outcome;
     }
@@ -170,7 +272,9 @@ export async function fillByLookup(
     value: mapped.value,
     confidence: ok ? mapped.confidence : "blocked",
     required: mapped.knockout,
+    choices: ok ? [] : await readFieldChoices(ctx.page, loc).catch(() => [] as string[]),
   };
+  if (kind === "yesno" && !ok) outcome.choices = mergeChoices(["Yes", "No"], outcome.choices);
   ctx.onField(outcome);
   return outcome;
 }

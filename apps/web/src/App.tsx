@@ -401,6 +401,47 @@ function Drawer({
   );
 }
 
+function ChoicePicker({
+  choices,
+  value,
+  onPick,
+}: {
+  choices: string[];
+  value: string;
+  onPick: (v: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const filtered = query ? choices.filter((c) => c.toLowerCase().includes(query)) : choices;
+  const shown = filtered.slice(0, 40);
+  return (
+    <div className="choice-wrap">
+      {choices.length > 12 ? (
+        <input
+          className="choice-filter"
+          placeholder={`Filter ${choices.length} options from the form`}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      ) : (
+        <div className="muted" style={{ marginBottom: 6 }}>
+          Options from the form — click to save
+        </div>
+      )}
+      <div className="choice-list">
+        {shown.map((c) => (
+          <button key={c} type="button" className={`choice ${value === c ? "selected" : ""}`} onClick={() => onPick(c)}>
+            {c}
+          </button>
+        ))}
+      </div>
+      {filtered.length > shown.length ? (
+        <div className="muted">Showing {shown.length} of {filtered.length}. Type to filter.</div>
+      ) : null}
+    </div>
+  );
+}
+
 function InboxPage({ onCount }: { onCount: (n: number) => void }) {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -417,10 +458,11 @@ function InboxPage({ onCount }: { onCount: (n: number) => void }) {
     void load();
   }, []);
 
-  function applyResult(r: { items: InboxItem[]; pendingCount: number }) {
+  function applyResult(r: { items: InboxItem[]; pendingCount: number }, clearDrafts = true) {
     setItems(r.items);
     onCount(r.pendingCount);
-    setDrafts({});
+    const keys = new Set(r.items.map((i) => i.key));
+    setDrafts((d) => (clearDrafts ? {} : Object.fromEntries(Object.entries(d).filter(([k]) => keys.has(k)))));
   }
 
   const filled = Object.fromEntries(Object.entries(drafts).filter(([, v]) => v.trim()));
@@ -429,8 +471,8 @@ function InboxPage({ onCount }: { onCount: (n: number) => void }) {
     <div className="page">
       <h1>Unanswered</h1>
       <p className="muted">
-        Blocked form questions land here and as empty keys in data/answers.yml. Answer with the wording the form expects
-        (dropdown option text, GPA, language, and so on). Skip hides a question so it is not asked again.
+        Blocked form questions land here. If the field was a dropdown, pick the exact option the form listed. Skip hides
+        a question so it is not asked again. Fill the job once more if a question has no options yet.
       </p>
       {items.length === 0 ? (
         <div className="empty">No unanswered questions. Run a fill and blocked fields will show up here.</div>
@@ -459,12 +501,26 @@ function InboxPage({ onCount }: { onCount: (n: number) => void }) {
                 <h2>{item.label}</h2>
                 <div className="inbox-meta">
                   {item.required ? <span className="chip failed">required</span> : <span className="chip">optional</span>}
+                  {item.choices?.length ? <span className="chip queued">{item.choices.length} options</span> : null}
                   {item.lastCompany ? <span className="muted">{item.lastCompany}</span> : null}
                   {item.seen > 1 ? <span className="muted">seen {item.seen}×</span> : null}
                 </div>
               </div>
+              {item.choices?.length ? (
+                <ChoicePicker
+                  choices={item.choices}
+                  value={drafts[item.key] ?? ""}
+                  onPick={(v) => {
+                    setDrafts({ ...drafts, [item.key]: v });
+                    void api.answerInbox({ [item.key]: v }).then((r) => {
+                      applyResult(r, false);
+                      setMsg(`Saved “${v}”`);
+                    });
+                  }}
+                />
+              ) : null}
               <textarea
-                placeholder="Answer as the form expects it"
+                placeholder={item.choices?.length ? "Or type a custom answer" : "Answer as the form expects it"}
                 value={drafts[item.key] ?? ""}
                 onChange={(e) => setDrafts({ ...drafts, [item.key]: e.target.value })}
               />

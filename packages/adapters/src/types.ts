@@ -6,6 +6,7 @@ export interface FieldOutcome {
   value: string;
   confidence: FieldConfidence;
   required: boolean;
+  choices?: string[];
 }
 
 export interface AdapterContext {

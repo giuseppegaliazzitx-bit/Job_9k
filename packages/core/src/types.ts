@@ -69,6 +69,7 @@ export interface FieldMapRow {
   value: string;
   confidence: FieldConfidence;
   required: boolean;
+  choices?: string[];
 }
 
 export interface Identity {

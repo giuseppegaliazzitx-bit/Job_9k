@@ -151,6 +151,20 @@ describe("captureBlockedFields", () => {
     expect(pending[0]?.seen).toBe(1);
   });
 
+  it("stores and merges dropdown choices", () => {
+    const dir = tmpData();
+    captureBlockedFields(
+      [{ label: "How did you hear about us?*", required: true, jobId: "j1", choices: ["Select...", "LinkedIn", "Job Board"] }],
+      dir,
+    );
+    captureBlockedFields(
+      [{ label: "How did you hear about us?*", required: true, jobId: "j1", choices: ["LinkedIn", "Referral", "Other"] }],
+      dir,
+    );
+    const item = listPendingInbox(dir).find((p) => p.key === "How did you hear about us?");
+    expect(item?.choices).toEqual(["LinkedIn", "Job Board", "Referral", "Other"]);
+  });
+
   it("makes the next lookup fill after the inbox is answered", () => {
     const dir = tmpData();
     const raw = "question_31645096003 What is your strongest coding language?*";

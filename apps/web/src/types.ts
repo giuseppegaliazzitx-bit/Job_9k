@@ -69,6 +69,7 @@ export interface InboxItem {
   lastUrl: string;
   lastJobId: string;
   sources: string[];
+  choices: string[];
 }
 
 export type View = "queue" | "applied" | "review" | "failed" | "profile" | "inbox" | "answers" | "settings";

@@ -3,6 +3,7 @@ export * from "./detect.js";
 export * from "./paths.js";
 export * from "./profile.js";
 export * from "./mapping.js";
+export * from "./choices.js";
 export * from "./db.js";
 export * from "./log.js";
 export * from "./inbox.js";

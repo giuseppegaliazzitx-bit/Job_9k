@@ -221,3 +221,24 @@ input[type="checkbox"] { accent-color: var(--blue); }
   resize: vertical;
 }
 .inbox-actions { display: flex; gap: 6px; margin-top: 10px; }
+.choice-wrap { margin: 0 0 10px; }
+.choice-filter {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+}
+.choice-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.choice {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--text);
+  max-width: 100%;
+  text-align: left;
+}
+.choice:hover { border-color: var(--blue); }
+.choice.selected { background: #152033; border-color: var(--blue); color: var(--blue); }

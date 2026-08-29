@@ -253,6 +253,7 @@ function queueBlockedQuestions(job: Job, maps: FieldMapRow[], dataDir: string): 
         title: job.title,
         url: job.url,
         jobId: job.id,
+        choices: m.choices ?? [],
       })),
       dataDir,
     );
@@ -272,6 +273,7 @@ function persistMaps(jobId: string, outcomes: FieldOutcome[]): FieldMapRow[] {
     value: o.confidence === "blocked" ? "" : o.value,
     confidence: o.confidence,
     required: o.required,
+    choices: o.choices ?? [],
   }));
   replaceFieldMaps(jobId, rows);
   return rows.map((r, i) => ({ id: i, jobId, ...r }));

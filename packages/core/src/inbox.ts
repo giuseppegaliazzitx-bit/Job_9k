@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import yaml from "js-yaml";
+import { mergeChoices } from "./choices.js";
 import { listBlockedFieldMaps } from "./db.js";
 import { fuzzyScore } from "./mapping.js";
 import { getDataDir, resolveData } from "./paths.js";
@@ -19,6 +20,7 @@ export interface InboxItem {
   lastUrl: string;
   lastJobId: string;
   sources: string[];
+  choices: string[];
 }
 
 export interface QuestionInbox {
@@ -32,6 +34,7 @@ export interface BlockedCapture {
   title?: string;
   url?: string;
   jobId?: string;
+  choices?: string[];
 }
 
 export interface CaptureResult {
@@ -135,6 +138,7 @@ export function loadInbox(dataDir = getDataDir()): QuestionInbox {
       lastUrl: String(item.lastUrl ?? ""),
       lastJobId: String(item.lastJobId ?? ""),
       sources: Array.isArray(item.sources) ? item.sources.map(String) : [],
+      choices: mergeChoices([], Array.isArray(item.choices) ? item.choices.map(String) : []),
     })).filter((i) => i.key),
   };
 }
@@ -189,6 +193,7 @@ export function captureBlockedFields(fields: BlockedCapture[], dataDir = getData
       lastUrl: "",
       lastJobId: "",
       sources: [],
+      choices: [],
     };
 
     if (!existingInbox) {
@@ -199,6 +204,12 @@ export function captureBlockedFields(fields: BlockedCapture[], dataDir = getData
 
     if (isRequired && !item.required) {
       item.required = true;
+      inboxChanged = true;
+    }
+
+    const nextChoices = mergeChoices(item.choices, field.choices);
+    if (nextChoices.length > item.choices.length) {
+      item.choices = nextChoices;
       inboxChanged = true;
     }
 

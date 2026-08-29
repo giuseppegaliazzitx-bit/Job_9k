@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import { lookupValue } from "@job9k/core";
 import type { AdapterContext, AdapterResult, AtsAdapter, FieldOutcome } from "./types.js";
 import {
+  blockedOutcome,
   clickApplyIfPresent,
   fieldDescriptor,
   handleDropdown,
@@ -26,7 +27,7 @@ async function fillObvious(ctx: AdapterContext): Promise<FieldOutcome[]> {
     const label = await fieldDescriptor(page, loc);
     const mapped = lookupValue(label, ctx.profile, ctx.answers);
     if (!mapped.value) {
-      const o: FieldOutcome = { label, value: "", confidence: "blocked", required: mapped.knockout };
+      const o = await blockedOutcome(page, loc, label, mapped.knockout);
       outcomes.push(o);
       ctx.onField(o);
       continue;

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { mergeChoices } from "./choices.js";
 import type { AtsType, FieldConfidence, FieldMapRow, Job, JobEvent, JobStatus } from "./types.js";
 import { getDataDir } from "./paths.js";
 
@@ -58,9 +59,18 @@ function migrate(d: DatabaseSync): void {
       label TEXT NOT NULL,
       value TEXT DEFAULT '',
       confidence TEXT NOT NULL,
-      required INTEGER DEFAULT 0
+      required INTEGER DEFAULT 0,
+      choices TEXT DEFAULT '[]'
     );
   `);
+  ensureColumn(d, "field_maps", "choices", "TEXT DEFAULT '[]'");
+}
+
+function ensureColumn(d: DatabaseSync, table: string, column: string, spec: string): void {
+  const cols = d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === column)) {
+    d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${spec}`);
+  }
 }
 
 function now(): string {
@@ -228,12 +238,25 @@ export function listEvents(jobId: string): JobEvent[] {
   }));
 }
 
+function parseChoices(raw: unknown): string[] {
+  if (Array.isArray(raw)) return mergeChoices([], raw.map(String));
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? mergeChoices([], parsed.map(String)) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function replaceFieldMaps(jobId: string, rows: Array<Omit<FieldMapRow, "id" | "jobId">>): void {
   const d = getDb();
   d.prepare("DELETE FROM field_maps WHERE job_id = ?").run(jobId);
-  const stmt = d.prepare("INSERT INTO field_maps (job_id, label, value, confidence, required) VALUES (?, ?, ?, ?, ?)");
+  const stmt = d.prepare(
+    "INSERT INTO field_maps (job_id, label, value, confidence, required, choices) VALUES (?, ?, ?, ?, ?, ?)",
+  );
   for (const row of rows) {
-    stmt.run(jobId, row.label, row.value, row.confidence, row.required ? 1 : 0);
+    stmt.run(jobId, row.label, row.value, row.confidence, row.required ? 1 : 0, JSON.stringify(row.choices ?? []));
   }
 }
 
@@ -246,6 +269,7 @@ export function listFieldMaps(jobId: string): FieldMapRow[] {
     value: String(r.value),
     confidence: r.confidence as FieldConfidence,
     required: Boolean(r.required),
+    choices: parseChoices(r.choices),
   }));
 }
 
@@ -256,10 +280,11 @@ export function listBlockedFieldMaps(): Array<{
   company: string;
   title: string;
   url: string;
+  choices: string[];
 }> {
   const rows = getDb()
     .prepare(
-      `SELECT f.label, f.required, j.id AS job_id, j.company, j.title, j.url
+      `SELECT f.label, f.required, f.choices, j.id AS job_id, j.company, j.title, j.url
        FROM field_maps f
        JOIN jobs j ON j.id = f.job_id
        WHERE f.confidence = 'blocked'
@@ -273,6 +298,7 @@ export function listBlockedFieldMaps(): Array<{
     company: String(r.company ?? ""),
     title: String(r.title ?? ""),
     url: String(r.url ?? ""),
+    choices: parseChoices(r.choices),
   }));
 }
 

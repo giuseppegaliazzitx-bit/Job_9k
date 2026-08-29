@@ -2,10 +2,12 @@ import type { Page } from "playwright";
 import { lookupValue } from "@job9k/core";
 import type { AdapterContext, AdapterResult, AtsAdapter, FieldOutcome } from "./types.js";
 import {
+  blockedOutcome,
   clickApplyIfPresent,
   fieldDescriptor,
   handleDropdown,
   handleNativeSelect,
+  readFieldChoices,
   SkipJobError,
   typeFill,
   uploadFirstMatching,
@@ -21,26 +23,35 @@ async function fillGreenhouseField(ctx: AdapterContext, loc: import("playwright"
   if (/recaptcha|honeypot|search/i.test(label)) return null;
 
   const mapped = lookupValue(label, ctx.profile, ctx.answers);
+  const required = mapped.knockout || (await loc.getAttribute("required")) !== null || /\*/.test(label);
   if (!mapped.value) {
     if (mapped.knockout) {
       const decision = await ctx.onUnknownQuestion(label, "");
       if (decision === "skip-job") throw new SkipJobError(label);
       if (decision === "leave") {
-        const o: FieldOutcome = { label, value: "", confidence: "blocked", required: true };
+        const o = await blockedOutcome(ctx.page, loc, label, true);
         ctx.onField(o);
         return o;
       }
       mapped.value = decision.value;
       mapped.confidence = "filled";
     } else {
-      return { label, value: "", confidence: "blocked", required: false };
+      const o = await blockedOutcome(ctx.page, loc, label, required);
+      ctx.onField(o);
+      return o;
     }
   }
 
   await waitIfPaused(ctx);
   let ok = false;
   if (type === "checkbox" || type === "radio") {
-    const o: FieldOutcome = { label, value: mapped.value, confidence: "guessed", required: mapped.knockout };
+    const o: FieldOutcome = {
+      label,
+      value: mapped.value,
+      confidence: "guessed",
+      required: mapped.knockout,
+      choices: await readFieldChoices(ctx.page, loc).catch(() => [] as string[]),
+    };
     ctx.onField(o);
     return o;
   }
@@ -63,7 +74,8 @@ async function fillGreenhouseField(ctx: AdapterContext, loc: import("playwright"
     label,
     value: mapped.value,
     confidence: ok ? mapped.confidence : "blocked",
-    required: mapped.knockout || (await loc.getAttribute("required")) !== null,
+    required,
+    choices: ok ? [] : await readFieldChoices(ctx.page, loc).catch(() => [] as string[]),
   };
   ctx.onField(outcome);
   return outcome;
