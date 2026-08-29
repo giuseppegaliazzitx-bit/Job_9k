@@ -207,3 +207,17 @@ tr { cursor: pointer; }
 .empty { color: var(--muted); padding: 48px 16px; text-align: center; }
 .toggle { display: flex; gap: 8px; align-items: center; }
 input[type="checkbox"] { accent-color: var(--blue); }
+
+.inbox-card h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.inbox-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.inbox-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.inbox-card textarea {
+  width: 100%;
+  min-height: 64px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.inbox-actions { display: flex; gap: 6px; margin-top: 10px; }

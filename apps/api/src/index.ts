@@ -6,14 +6,18 @@ import express from "express";
 import multer from "multer";
 import {
   addEvent,
+  answerInboxItems,
   detectAtsFromUrl,
   deleteJob,
+  dismissInboxItems,
   getDataDir,
   getJob,
+  harvestBlockedFromDb,
   insertJob,
   listEvents,
   listFieldMaps,
   listJobs,
+  listPendingInbox,
   loadAnswers,
   loadProfile,
   loadSettings,
@@ -147,6 +151,31 @@ app.put("/api/profile", (req, res) => {
 
 app.get("/api/answers", (_req, res) => {
   res.json(loadAnswers());
+});
+
+app.get("/api/inbox", (_req, res) => {
+  harvestBlockedFromDb(dataDir);
+  const items = listPendingInbox(dataDir);
+  res.json({ items, pendingCount: items.length });
+});
+
+app.post("/api/inbox/answer", (req, res) => {
+  const body = req.body ?? {};
+  const values =
+    body.answers && typeof body.answers === "object"
+      ? (body.answers as Record<string, string>)
+      : body.key
+        ? { [String(body.key)]: String(body.value ?? "") }
+        : {};
+  const items = answerInboxItems(values, dataDir);
+  res.json({ items, pendingCount: items.length });
+});
+
+app.post("/api/inbox/dismiss", (req, res) => {
+  const body = req.body ?? {};
+  const keys: string[] = Array.isArray(body.keys) ? body.keys.map(String) : body.key ? [String(body.key)] : [];
+  const items = dismissInboxItems(keys, dataDir);
+  res.json({ items, pendingCount: items.length });
 });
 
 app.put("/api/answers", (req, res) => {

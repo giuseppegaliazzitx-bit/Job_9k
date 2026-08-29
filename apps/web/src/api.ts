@@ -1,4 +1,4 @@
-import type { FieldMap, Job, JobEvent } from "./types";
+import type { FieldMap, InboxItem, Job, JobEvent } from "./types";
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -28,6 +28,11 @@ export const api = {
   saveProfile: (p: unknown) => j("/api/profile", { method: "PUT", body: JSON.stringify(p) }),
   answers: () => j<Record<string, string>>("/api/answers"),
   saveAnswers: (a: Record<string, string>) => j("/api/answers", { method: "PUT", body: JSON.stringify(a) }),
+  inbox: () => j<{ items: InboxItem[]; pendingCount: number }>("/api/inbox"),
+  answerInbox: (answers: Record<string, string>) =>
+    j<{ items: InboxItem[]; pendingCount: number }>("/api/inbox/answer", { method: "POST", body: JSON.stringify({ answers }) }),
+  dismissInbox: (keys: string[]) =>
+    j<{ items: InboxItem[]; pendingCount: number }>("/api/inbox/dismiss", { method: "POST", body: JSON.stringify({ keys }) }),
   settings: () => j<Record<string, unknown>>("/api/settings"),
   saveSettings: (s: unknown) => j("/api/settings", { method: "PUT", body: JSON.stringify(s) }),
 };

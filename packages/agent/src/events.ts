@@ -6,7 +6,8 @@ export type BusEvent =
   | { type: "field"; jobId: string; label: string; value: string; confidence: string }
   | { type: "screenshot"; jobId: string; path: string }
   | { type: "question"; jobId: string; runId: string; question: string; draft: string }
-  | { type: "done"; jobId: string; status: string };
+  | { type: "done"; jobId: string; status: string }
+  | { type: "inbox"; jobId: string; added: number; pending: number };
 
 export const bus = new EventEmitter();
 bus.setMaxListeners(50);

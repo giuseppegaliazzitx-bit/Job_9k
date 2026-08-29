@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import ProfileForm from "./ProfileForm";
-import type { FieldMap, Job, JobEvent, View } from "./types";
+import type { FieldMap, InboxItem, Job, JobEvent, View } from "./types";
 
 const NAV: Array<{ id: View; label: string }> = [
   { id: "queue", label: "Queue" },
@@ -9,6 +9,7 @@ const NAV: Array<{ id: View; label: string }> = [
   { id: "review", label: "Needs review" },
   { id: "failed", label: "Failed" },
   { id: "profile", label: "Profile" },
+  { id: "inbox", label: "Unanswered" },
   { id: "answers", label: "Answer bank" },
   { id: "settings", label: "Settings" },
 ];
@@ -42,6 +43,7 @@ export default function App() {
   const [detail, setDetail] = useState<{ job: Job; events: JobEvent[]; fields: FieldMap[] } | null>(null);
   const [question, setQuestion] = useState<{ jobId: string; question: string; draft: string } | null>(null);
   const [draft, setDraft] = useState("");
+  const [inboxCount, setInboxCount] = useState(0);
 
   async function refresh() {
     const status = FILTER[view];
@@ -52,6 +54,19 @@ export default function App() {
     void refresh();
   }, [view]);
 
+  async function refreshInboxCount() {
+    try {
+      const r = await api.inbox();
+      setInboxCount(r.pendingCount);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    void refreshInboxCount();
+  }, []);
+
   useEffect(() => {
     const es = new EventSource("/api/events");
     es.onmessage = (ev) => {
@@ -60,6 +75,9 @@ export default function App() {
         if (data.type === "status" || data.type === "done" || data.type === "log" || data.type === "field" || data.type === "screenshot") {
           void refresh();
           if (openId && data.jobId === openId) void loadDetail(openId);
+        }
+        if (data.type === "inbox" || data.type === "done") {
+          void refreshInboxCount();
         }
         if (data.type === "question" && data.jobId && data.question) {
           setQuestion({ jobId: data.jobId, question: data.question, draft: data.draft ?? "" });
@@ -101,6 +119,7 @@ export default function App() {
         {NAV.map((n) => (
           <button key={n.id} className={`nav-btn ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)}>
             {n.label}
+            {n.id === "inbox" && inboxCount > 0 ? <span className="nav-count">{inboxCount}</span> : null}
             {n.id === view && tableViews ? <span className="nav-count">{counts.queue}</span> : null}
           </button>
         ))}
@@ -149,6 +168,7 @@ export default function App() {
             </>
           )}
           {view === "profile" && <ProfileForm />}
+          {view === "inbox" && <InboxPage onCount={setInboxCount} />}
           {view === "answers" && <AnswersPage />}
           {view === "settings" && <SettingsPage />}
         </div>
@@ -343,6 +363,11 @@ function Drawer({
             <span className="muted">{f.confidence}</span>
           </div>
         ))}
+        {fields.some((f) => f.confidence === "blocked") && (
+          <div className="muted" style={{ marginTop: 8 }}>
+            Blocked questions are copied to Unanswered so you can answer them once.
+          </div>
+        )}
       </div>
       <div className="section">
         <h3>Resume</h3>
@@ -373,6 +398,111 @@ function Drawer({
         Auto-submit this job (still requires Settings allowlist)
       </label>
     </aside>
+  );
+}
+
+function InboxPage({ onCount }: { onCount: (n: number) => void }) {
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    const r = await api.inbox();
+    setItems(r.items);
+    onCount(r.pendingCount);
+    setDrafts({});
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  function applyResult(r: { items: InboxItem[]; pendingCount: number }) {
+    setItems(r.items);
+    onCount(r.pendingCount);
+    setDrafts({});
+  }
+
+  const filled = Object.fromEntries(Object.entries(drafts).filter(([, v]) => v.trim()));
+
+  return (
+    <div className="page">
+      <h1>Unanswered</h1>
+      <p className="muted">
+        Blocked form questions land here and as empty keys in data/answers.yml. Answer with the wording the form expects
+        (dropdown option text, GPA, language, and so on). Skip hides a question so it is not asked again.
+      </p>
+      {items.length === 0 ? (
+        <div className="empty">No unanswered questions. Run a fill and blocked fields will show up here.</div>
+      ) : (
+        <>
+          <div className="btn-row" style={{ flexDirection: "row", marginBottom: 12, minWidth: 0 }}>
+            <button
+              className="btn primary"
+              disabled={Object.keys(filled).length === 0}
+              onClick={() => {
+                void api.answerInbox(filled).then((r) => {
+                  applyResult(r);
+                  setMsg(`Saved ${Object.keys(filled).length}`);
+                });
+              }}
+            >
+              Save filled
+            </button>
+            <span className="muted" style={{ alignSelf: "center" }}>
+              {items.length} waiting{msg ? ` · ${msg}` : ""}
+            </span>
+          </div>
+          {items.map((item) => (
+            <div className="card inbox-card" key={item.key}>
+              <div className="inbox-head">
+                <h2>{item.label}</h2>
+                <div className="inbox-meta">
+                  {item.required ? <span className="chip failed">required</span> : <span className="chip">optional</span>}
+                  {item.lastCompany ? <span className="muted">{item.lastCompany}</span> : null}
+                  {item.seen > 1 ? <span className="muted">seen {item.seen}×</span> : null}
+                </div>
+              </div>
+              <textarea
+                placeholder="Answer as the form expects it"
+                value={drafts[item.key] ?? ""}
+                onChange={(e) => setDrafts({ ...drafts, [item.key]: e.target.value })}
+              />
+              <div className="inbox-actions">
+                <button
+                  className="btn primary"
+                  disabled={!(drafts[item.key] ?? "").trim()}
+                  onClick={() => {
+                    void api.answerInbox({ [item.key]: drafts[item.key] }).then((r) => {
+                      applyResult(r);
+                      setMsg("Saved");
+                    });
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    void api.dismissInbox([item.key]).then((r) => {
+                      applyResult(r);
+                      setMsg("Skipped");
+                    });
+                  }}
+                >
+                  Skip
+                </button>
+                {item.lastUrl ? (
+                  <a className="btn ghost" href={item.lastUrl} target="_blank" rel="noreferrer">
+                    Form
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
   );
 }
 

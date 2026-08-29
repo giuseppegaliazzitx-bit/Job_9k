@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   addEvent,
+  captureBlockedFields,
   companyBlacklisted,
   getDataDir,
   getJob,
@@ -206,6 +207,7 @@ async function runJobNow(jobId: string, opts: { autoSubmit?: boolean } = {}): Pr
     }
 
     const maps = persistMaps(job.id, result.outcomes);
+    queueBlockedQuestions(job, maps, dataDir);
     logFromMaps(job.url, adapter.ats, status, maps, shot, { company: job.company, title: job.title, note });
     const updated = updateJob(job.id, { status, note, lastError: "", screenshotPath: shot, ats: adapter.ats, applyUrl })!;
     emit({ type: "status", jobId: job.id, status });
@@ -222,7 +224,9 @@ async function runJobNow(jobId: string, opts: { autoSubmit?: boolean } = {}): Pr
     const message = err instanceof Error ? err.message : String(err);
     const shot = await screenshot(page, job, dataDir, "failed");
     log(job, message, "error");
-    logFromMaps(job.url, job.ats, "failed", persistMaps(job.id, outcomes), shot, {
+    const maps = persistMaps(job.id, outcomes);
+    queueBlockedQuestions(job, maps, dataDir);
+    logFromMaps(job.url, job.ats, "failed", maps, shot, {
       company: job.company,
       title: job.title,
       note: message,
@@ -234,6 +238,31 @@ async function runJobNow(jobId: string, opts: { autoSubmit?: boolean } = {}): Pr
   } finally {
     runs.delete(jobId);
     // Leave the page open so the user can submit / take over. Do not close the persistent context.
+  }
+}
+
+function queueBlockedQuestions(job: Job, maps: FieldMapRow[], dataDir: string): void {
+  const blocked = maps.filter((m) => m.confidence === "blocked");
+  if (!blocked.length) return;
+  try {
+    const result = captureBlockedFields(
+      blocked.map((m) => ({
+        label: m.label,
+        required: m.required,
+        company: job.company,
+        title: job.title,
+        url: job.url,
+        jobId: job.id,
+      })),
+      dataDir,
+    );
+    if (result.inboxAdded.length || result.addedKeys.length) {
+      log(job, `Queued ${result.pendingCount} unanswered question${result.pendingCount === 1 ? "" : "s"}`);
+    }
+    emit({ type: "inbox", jobId: job.id, added: result.inboxAdded.length, pending: result.pendingCount });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log(job, `Could not capture unanswered questions: ${message}`, "warn");
   }
 }
 

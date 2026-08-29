@@ -10,6 +10,7 @@ build/
 data/profile.yml
 data/answers.yml
 data/settings.yml
+data/question-inbox.yml
 data/queue.db
 data/queue.db-wal
 data/queue.db-shm

@@ -249,6 +249,33 @@ export function listFieldMaps(jobId: string): FieldMapRow[] {
   }));
 }
 
+export function listBlockedFieldMaps(): Array<{
+  label: string;
+  required: boolean;
+  jobId: string;
+  company: string;
+  title: string;
+  url: string;
+}> {
+  const rows = getDb()
+    .prepare(
+      `SELECT f.label, f.required, j.id AS job_id, j.company, j.title, j.url
+       FROM field_maps f
+       JOIN jobs j ON j.id = f.job_id
+       WHERE f.confidence = 'blocked'
+       ORDER BY j.updated_at ASC, f.id ASC`,
+    )
+    .all() as Record<string, unknown>[];
+  return rows.map((r) => ({
+    label: String(r.label),
+    required: Boolean(r.required),
+    jobId: String(r.job_id),
+    company: String(r.company ?? ""),
+    title: String(r.title ?? ""),
+    url: String(r.url ?? ""),
+  }));
+}
+
 export function dbFileExists(dataDir = getDataDir()): boolean {
   return existsSync(resolve(dataDir, "queue.db"));
 }

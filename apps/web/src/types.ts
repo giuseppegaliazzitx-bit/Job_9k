@@ -56,4 +56,19 @@ export interface FieldMap {
   required: boolean;
 }
 
-export type View = "queue" | "applied" | "review" | "failed" | "profile" | "answers" | "settings";
+export interface InboxItem {
+  key: string;
+  label: string;
+  required: boolean;
+  dismissed: boolean;
+  seen: number;
+  firstSeen: string;
+  lastSeen: string;
+  lastCompany: string;
+  lastTitle: string;
+  lastUrl: string;
+  lastJobId: string;
+  sources: string[];
+}
+
+export type View = "queue" | "applied" | "review" | "failed" | "profile" | "inbox" | "answers" | "settings";

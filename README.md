@@ -52,8 +52,9 @@ Chromium is installed via Playwright on `npm install`. Headed mode is the defaul
 2. Paste apply URLs into the queue (newline-separated).
 3. **Run next** or **Fill** on a row. A Chromium window opens and fills the form.
 4. Review the mapped-field checklist (green filled / amber guessed / red blocked).
-5. Click Submit yourself in the browser.
-6. Failed runs keep a screenshot under `data/screenshots/`.
+5. Blocked questions are copied into **Unanswered** (and empty keys in `data/answers.yml`). Fill them there once; later jobs reuse the answers.
+6. Click Submit yourself in the browser.
+7. Failed runs keep a screenshot under `data/screenshots/`.
 
 Fill+submit is dangerous. It only fires when Settings → auto-submit is enabled, the ATS is on the allowlist (Greenhouse/Lever in v1), and no required field is blocked.
 
@@ -65,7 +66,7 @@ apps/api          local Express server
 packages/core     queue, profile, ATS detect, SQLite, jsonl log
 packages/adapters greenhouse, lever, ashby, workday, gem, icims, generic
 packages/agent    Playwright persistent context + optional LLM fallback
-data/             sqlite, profile.yml, answers.yml, resumes/, screenshots/
+data/             sqlite, profile.yml, answers.yml, question-inbox.yml, resumes/, screenshots/
 ```
 
 SQLite: `data/queue.db`  
