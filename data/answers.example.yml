@@ -1,0 +1,32 @@
+# Repeated screening answers. Keys are matched fuzzily to form labels.
+# Knockout questions (work auth, sponsorship, years of experience, salary,
+# security clearance) are NEVER guessed — they must exist here or in profile.yml.
+
+years_python: "5"
+years_typescript: "5"
+years_javascript: "6"
+years_react: "4"
+years_sql: "5"
+why_company: ""
+notice_period: "2 weeks"
+salary_expectation: ""
+security_clearance: "No"
+how_heard: Job Boards
+willing_to_relocate: "No"
+willing_onsite: "Yes"
+authorized_us: "Yes"
+sponsorship_needed: "No"
+gender: ""
+veteran_status: "I do not want to answer"
+disability_status: "I do not want to answer"
+preferred_name: Jane
+pronouns: ""
+github: "https://github.com/janedoe"
+website: "https://janedoe.dev"
+linkedin: "https://www.linkedin.com/in/janedoe"
+start_date: "2 weeks"
+current_company: Acme
+current_title: Software Engineer
+phone: "5551234567"
+email: jane.doe@example.com
+location: "San Francisco, California"

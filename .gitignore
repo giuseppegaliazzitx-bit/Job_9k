@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+.turbo/
+*.log
+.env
+.env.local
+
+# Runtime data (profile, answers, sqlite, screenshots, resumes)
+data/profile.yml
+data/answers.yml
+data/settings.yml
+data/queue.db
+data/queue.db-wal
+data/queue.db-shm
+data/applications.jsonl
+data/resumes/*
+!data/resumes/.gitkeep
+data/screenshots/*
+!data/screenshots/.gitkeep
+data/browser-profile/
+data/cover-letters/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

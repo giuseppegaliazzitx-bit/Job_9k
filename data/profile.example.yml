@@ -1,0 +1,76 @@
+# Copy to data/profile.yml (gitignored) and fill in your details.
+# Never leave knockout fields blank if you want them auto-filled:
+# work_auth, sponsorship_needed, years of experience, salary.
+
+identity:
+  first_name: Jane
+  last_name: Doe
+  preferred_name: Jane
+  email: jane.doe@example.com
+  phone: "5551234567"
+  phone_country: "United States (+1)"
+  location: "San Francisco, California"
+  city: "San Francisco"
+  state: California
+  postal_code: "94105"
+  address_line1: ""
+  address_line2: ""
+  country: "United States"
+  linkedin: "https://www.linkedin.com/in/janedoe"
+  github: "https://github.com/janedoe"
+  portfolio: "https://janedoe.dev"
+  # Explicit yes/no — never inferred
+  work_auth: "Yes"
+  sponsorship_needed: "No"
+
+files:
+  resume: data/resumes/resume.pdf
+  cover_letter: ""
+
+skills:
+  - TypeScript
+  - React
+  - Node.js
+  - Python
+  - PostgreSQL
+
+experience:
+  years: "5"
+  current_company: Acme
+  current_title: Software Engineer
+  notice_period: "2 weeks"
+  salary_expectation: ""
+  roles:
+    - company: Acme
+      title: Software Engineer
+      location: San Francisco, CA
+      start: "2022-03"
+      end: Present
+      bullets:
+        - Built internal tools in TypeScript and React
+        - Owned API performance work on Node.js services
+
+education:
+  - school: State University
+    degree: Bachelor of Science
+    major: Computer Science
+    start: "2016"
+    end: "2020"
+
+eeo:
+  gender: ""
+  hispanic_latino: ""
+  race: ""
+  veteran_status: "I do not want to answer"
+  disability_status: "I do not want to answer"
+
+work_auth:
+  authorized_us: "Yes"
+  sponsorship_needed: "No"
+  visa_status: ""
+  office_willing: "Yes"
+  willing_to_relocate: "No"
+  remote_preference: Hybrid
+
+blacklist:
+  - ExampleCorp

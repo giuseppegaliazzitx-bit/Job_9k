@@ -1,0 +1,19 @@
+{
+  "name": "@job9k/agent",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@job9k/adapters": "*",
+    "@job9k/core": "*",
+    "openai": "^5.12.2",
+    "playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,15 @@
+# Four public ATS fixture URLs for headed dry-run.
+# These are listing/job pages, not an instruction to submit.
+# Do not spam Submit on any of these.
+
+# Greenhouse (public job board)
+https://job-boards.greenhouse.io/stripe
+
+# Lever
+https://jobs.lever.co/netflix
+
+# Ashby
+https://jobs.ashbyhq.com/openai
+
+# Workday
+https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite

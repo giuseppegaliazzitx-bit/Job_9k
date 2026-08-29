@@ -1,0 +1,22 @@
+browser:
+  headed: true
+  slow_mo_ms: 50
+  typing_delay_ms: 40
+
+# Global auto-submit is off. Even if enabled, only allowlisted ATS may submit,
+# and only when every required field mapped with confidence "filled".
+auto_submit:
+  enabled: false
+  allowlist:
+    - greenhouse
+    - lever
+
+llm:
+  # none | openai-compatible | anthropic
+  provider: none
+  # SpaceXAI (xAI) is the default OpenAI-compatible target.
+  base_url: https://api.x.ai/v1
+  model: grok-4.6
+  api_key_env: XAI_API_KEY
+
+data_dir: ./data
