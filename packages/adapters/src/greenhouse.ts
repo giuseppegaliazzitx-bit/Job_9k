@@ -105,8 +105,46 @@ export const greenhouseAdapter: AtsAdapter = {
   },
 
   async fill(ctx: AdapterContext): Promise<AdapterResult> {
-    const { page } = ctx;
+    const { page, profile } = ctx;
     const outcomes: FieldOutcome[] = [];
+
+    const named: Array<[string, string]> = [
+      ["#first_name, input[name='first_name']", profile.identity.first_name],
+      ["#last_name, input[name='last_name']", profile.identity.last_name],
+      ["#email, input[name='email']", profile.identity.email],
+      ["#phone, input[name='phone']", profile.identity.phone],
+      ["input[name*='linkedin' i], #linkedin", profile.identity.linkedin],
+      ["input[name*='github' i]", profile.identity.github],
+      ["input[name*='website' i], input[name*='portfolio' i]", profile.identity.portfolio],
+    ];
+    for (const [sel, value] of named) {
+      if (!value) continue;
+      const loc = page.locator(sel).first();
+      if ((await loc.count()) === 0) continue;
+      await waitIfPaused(ctx);
+      try {
+        await typeFill(loc, value, ctx.typingDelayMs);
+        const label = (await fieldDescriptor(page, loc)) || sel;
+        const o: FieldOutcome = { label, value, confidence: "filled", required: true };
+        outcomes.push(o);
+        ctx.onField(o);
+      } catch {
+        /* continue */
+      }
+    }
+
+    if (profile.identity.location) {
+      const locField = page.locator("input[name*='location' i], #job_application_location, input[placeholder*='Location' i]").first();
+      if ((await locField.count()) > 0) {
+        await typeFill(locField, profile.identity.location, ctx.typingDelayMs).catch(() => undefined);
+        await page.waitForTimeout(600);
+        const opt = page.locator('[role="option"], .select__option').first();
+        if (await opt.isVisible().catch(() => false)) await opt.click().catch(() => undefined);
+        const o: FieldOutcome = { label: "Location", value: profile.identity.location, confidence: "filled", required: false };
+        outcomes.push(o);
+        ctx.onField(o);
+      }
+    }
 
     if (ctx.resumePath) {
       const uploaded = await uploadFirstMatching(page, ["#resume", "input[type='file'][name*='resume' i]", "input[type='file']"], ctx.resumePath);

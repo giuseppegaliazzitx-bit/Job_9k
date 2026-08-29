@@ -181,16 +181,13 @@ export async function verifyDropdownFilled(loc: Locator): Promise<boolean> {
   }
   return loc
     .evaluate((el) => {
-      const root =
-        el.closest('[class*="container"]') || el.closest(".select") || el.closest(".field") || el.parentElement;
+      const root = el.closest(".select, [class*='select__'], .iti") || el.parentElement;
       if (!root) return false;
-      const sv = root.querySelector(".select__single-value, [class*='singleValue']");
+      const sv = root.querySelector(":scope > .select__single-value, :scope .select__single-value, [class*='singleValue']");
       const text = sv?.textContent?.trim() ?? "";
       if (text && !/^select/i.test(text)) return true;
       const multi = root.querySelectorAll(".select__multi-value, [class*='multiValue']");
       if (multi.length > 0) return true;
-      const ph = root.querySelector(".select__placeholder") as HTMLElement | null;
-      if (ph && !ph.offsetParent) return true;
       if (el instanceof HTMLSelectElement) {
         const opt = el.selectedOptions[0];
         return Boolean(opt && opt.value && opt.text && !/^select/i.test(opt.text.trim()));
@@ -427,28 +424,24 @@ export async function handlePhoneCountry(page: Page, loc: Locator, value: string
 
 export async function handleYesNoButton(page: Page, label: string, value: string): Promise<boolean> {
   const want = /^(yes|true|y)$/i.test(value.trim()) ? "Yes" : /^(no|false|n)$/i.test(value.trim()) ? "No" : value;
-  const clicked = await page.evaluate(
-    ({ labelText, targetValue }) => {
-      const labels = Array.from(document.querySelectorAll("label, p, h3, h4, span, legend"));
-      const target = labels.find((l) => {
-        const t = (l.textContent || "").trim();
-        return t.startsWith(labelText.slice(0, 40)) || (t.length < labelText.length + 40 && t.includes(labelText.slice(0, 30)));
-      });
-      if (!target) return false;
-      const container =
-        target.closest('[class*="field"], [class*="question"], [class*="Field"], [class*="Question"]') || target.parentElement;
-      if (!container) return false;
-      const buttons = container.querySelectorAll("button");
-      for (const btn of buttons) {
-        if ((btn.textContent || "").trim() === targetValue) {
-          (btn as HTMLButtonElement).click();
-          return true;
-        }
-      }
-      return false;
-    },
-    { labelText: label, targetValue: want },
-  );
+  const payload = JSON.stringify({ labelText: label, targetValue: want });
+  const clicked = await page.evaluate(`((arg) => {
+    const labelText = arg.labelText;
+    const targetValue = arg.targetValue;
+    const labels = Array.from(document.querySelectorAll("label, p, h3, h4, span, legend"));
+    const target = labels.find((l) => {
+      const t = (l.textContent || "").trim();
+      return t.startsWith(labelText.slice(0, 40)) || (t.length < labelText.length + 40 && t.includes(labelText.slice(0, 30)));
+    });
+    if (!target) return false;
+    const container = target.closest('[class*="field"], [class*="question"], [class*="Field"], [class*="Question"]') || target.parentElement;
+    if (!container) return false;
+    const buttons = container.querySelectorAll("button");
+    for (const btn of buttons) {
+      if ((btn.textContent || "").trim() === targetValue) { btn.click(); return true; }
+    }
+    return false;
+  })(${payload})`);
   if (clicked) return true;
   return clickYesNo(page, page.locator(`text=${label.slice(0, 40)}`).first(), want);
 }

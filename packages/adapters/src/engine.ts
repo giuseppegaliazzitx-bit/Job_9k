@@ -77,7 +77,7 @@ export async function fillScannedFields(
       const loc0 = await locate(ctx, field);
       if (loc0) {
         const existing = await loc0.inputValue().catch(() => "");
-        if (looksFilled(existing) || (await verifyDropdownFilled(loc0))) continue;
+        if (looksFilled(existing)) continue;
       }
     }
 
@@ -182,8 +182,14 @@ export async function verifyAndRetry(
 }
 
 export async function scanPlanFill(ctx: AdapterContext, opts: FillScanOptions = {}): Promise<FieldOutcome[]> {
-  const fields = await scanFormFields(ctx.page);
-  ctx.log(`Scan: ${fields.length} fields`);
-  const outcomes = await fillScannedFields(ctx, fields, opts);
-  return verifyAndRetry(ctx, fields, outcomes, opts);
+  try {
+    const fields = await scanFormFields(ctx.page);
+    ctx.log(`Scan: ${fields.length} fields`);
+    const outcomes = await fillScannedFields(ctx, fields, opts);
+    return verifyAndRetry(ctx, fields, outcomes, opts);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.log(`Scan/fill failed: ${message}`, "error");
+    return [];
+  }
 }

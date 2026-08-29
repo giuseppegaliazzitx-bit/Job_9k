@@ -71,137 +71,121 @@ export function classifyScannedField(raw: {
   };
 }
 
-export async function scanFormFields(page: Page): Promise<ScannedField[]> {
-  const raw = await page.evaluate(() => {
-    const results: Array<{
-      id: string;
-      name: string;
-      label: string;
-      inputType: string;
-      tag: string;
-      role: string;
-      className: string;
-      required: boolean;
-      selector: string;
-      options: string[];
-      autocomplete: string;
-    }> = [];
-    const seen = new Set<string>();
-
-    function getLabel(el: Element): string {
-      const htmlEl = el as HTMLElement;
-      if (htmlEl.id) {
-        const label = document.querySelector(`label[for="${CSS.escape(htmlEl.id)}"]`);
-        if (label?.textContent) return label.textContent.trim();
-      }
-      const parentLabel = el.closest("label");
-      if (parentLabel?.textContent) return parentLabel.textContent.trim();
-      if (htmlEl.getAttribute("aria-label")) return htmlEl.getAttribute("aria-label")!.trim();
-      const labelledBy = htmlEl.getAttribute("aria-labelledby");
-      if (labelledBy) {
-        const ref = document.getElementById(labelledBy.split(/\s+/)[0] ?? "");
-        if (ref?.textContent) return ref.textContent.trim();
-      }
-      if ((htmlEl as HTMLInputElement).placeholder) return (htmlEl as HTMLInputElement).placeholder.trim();
-      return (htmlEl.getAttribute("name") || htmlEl.id || "").trim();
+const SCAN_IN_PAGE = `(() => {
+  const results = [];
+  const seen = new Set();
+  const getLabel = (el) => {
+    if (el.id) {
+      const label = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+      if (label && label.textContent) return label.textContent.trim();
     }
-
-    function requiredOf(el: HTMLElement): boolean {
-      const input = el as HTMLInputElement;
-      return Boolean(
-        input.required ||
-          el.getAttribute("aria-required") === "true" ||
-          /\*/.test(getLabel(el)),
-      );
+    const parentLabel = el.closest("label");
+    if (parentLabel && parentLabel.textContent) return parentLabel.textContent.trim();
+    if (el.getAttribute("aria-label")) return el.getAttribute("aria-label").trim();
+    const labelledBy = el.getAttribute("aria-labelledby");
+    if (labelledBy) {
+      const ref = document.getElementById(labelledBy.split(/\\s+/)[0] || "");
+      if (ref && ref.textContent) return ref.textContent.trim();
     }
-
-    document.querySelectorAll("input, textarea, select").forEach((node) => {
-      const el = node as HTMLInputElement;
-      const type = (el.type || el.tagName.toLowerCase()).toLowerCase();
-      if (["hidden", "submit", "button", "image", "reset"].includes(type)) return;
-      const key = el.id || el.name || `${type}-${results.length}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      let selector = "";
-      if (el.id) selector = `#${CSS.escape(el.id)}`;
-      else if (el.name) selector = `${el.tagName.toLowerCase()}[name="${el.name.replace(/"/g, '\\"')}"]`;
-      const options: string[] = [];
-      if (el instanceof HTMLSelectElement) {
-        for (const o of el.options) {
-          const t = (o.textContent || o.label || "").trim();
-          if (t) options.push(t);
-        }
-      }
-      if (type === "radio" && el.name) {
-        document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`).forEach((r) => {
-          const re = r as HTMLInputElement;
-          const lab = re.id ? document.querySelector(`label[for="${CSS.escape(re.id)}"]`) : null;
-          options.push((lab?.textContent || re.value || "").trim());
-        });
-      }
-      const wrap = el.closest(".iti, [class*='iti']");
-      results.push({
-        id: el.id || key,
-        name: el.name || "",
-        label: getLabel(el),
-        inputType: wrap && type === "tel" ? "tel" : type,
-        tag: el.tagName.toLowerCase(),
-        role: (el.getAttribute("role") || "").toLowerCase(),
-        className: `${el.className || ""} ${wrap ? "iti" : ""}`,
-        required: requiredOf(el),
-        selector,
-        options: options.filter(Boolean),
-        autocomplete: (el.getAttribute("autocomplete") || "").toLowerCase(),
+    if (el.placeholder) return String(el.placeholder).trim();
+    return String(el.getAttribute("name") || el.id || "").trim();
+  };
+  const requiredOf = (el) => !!(el.required || el.getAttribute("aria-required") === "true" || /\\*/.test(getLabel(el)));
+  document.querySelectorAll("input, textarea, select").forEach((el) => {
+    const type = (el.type || el.tagName.toLowerCase()).toLowerCase();
+    if (["hidden", "submit", "button", "image", "reset"].includes(type)) return;
+    const key = el.id || el.name || type + "-" + results.length;
+    if (seen.has(key)) return;
+    seen.add(key);
+    let selector = "";
+    if (el.id) selector = "#" + CSS.escape(el.id);
+    else if (el.name) selector = el.tagName.toLowerCase() + '[name="' + String(el.name).replace(/"/g, '\\\\"') + '"]';
+    const options = [];
+    if (el.tagName.toLowerCase() === "select") {
+      Array.from(el.options).forEach((o) => {
+        const t = (o.textContent || o.label || "").trim();
+        if (t) options.push(t);
       });
-    });
-
-    document.querySelectorAll('[role="combobox"], [aria-haspopup="listbox"]').forEach((el) => {
-      const html = el as HTMLElement;
-      const key = html.id || html.getAttribute("name") || `combo-${results.length}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      results.push({
-        id: html.id || key,
-        name: html.getAttribute("name") || "",
-        label: getLabel(html),
-        inputType: "text",
-        tag: html.tagName.toLowerCase(),
-        role: "combobox",
-        className: String(html.className || ""),
-        required: requiredOf(html),
-        selector: html.id ? `#${CSS.escape(html.id)}` : '[role="combobox"]',
-        options: [],
-        autocomplete: (html.getAttribute("autocomplete") || "").toLowerCase(),
+    }
+    if (type === "radio" && el.name) {
+      document.querySelectorAll('input[type="radio"][name="' + CSS.escape(el.name) + '"]').forEach((r) => {
+        const lab = r.id ? document.querySelector('label[for="' + CSS.escape(r.id) + '"]') : null;
+        options.push(((lab && lab.textContent) || r.value || "").trim());
       });
+    }
+    const wrap = el.closest(".iti, [class*='iti']");
+    results.push({
+      id: el.id || key,
+      name: el.name || "",
+      label: getLabel(el),
+      inputType: wrap && type === "tel" ? "tel" : type,
+      tag: el.tagName.toLowerCase(),
+      role: (el.getAttribute("role") || "").toLowerCase(),
+      className: String(el.className || "") + (wrap ? " iti" : ""),
+      required: requiredOf(el),
+      selector: selector,
+      options: options.filter(Boolean),
+      autocomplete: (el.getAttribute("autocomplete") || "").toLowerCase(),
     });
-
-    document.querySelectorAll("label").forEach((label) => {
-      const container =
-        label.closest('[class*="field"], [class*="question"], [class*="Field"]') || label.parentElement;
-      if (!container) return;
-      const buttons = [...container.querySelectorAll("button")].map((b) => b.textContent?.trim() || "");
-      if (buttons.includes("Yes") && buttons.includes("No")) {
-        const key = `yesno-${label.textContent?.trim().slice(0, 40)}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        results.push({
-          id: label.htmlFor || key,
-          name: "",
-          label: (label.textContent || "").trim(),
-          inputType: "yes-no-button",
-          tag: "button",
-          role: "",
-          className: "",
-          required: /\*/.test(label.textContent || ""),
-          selector: "",
-          options: ["Yes", "No"],
-          autocomplete: "",
-        });
-      }
-    });
-
-    return results;
   });
+  document.querySelectorAll('[role="combobox"], [aria-haspopup="listbox"]').forEach((el) => {
+    const key = el.id || el.getAttribute("name") || "combo-" + results.length;
+    if (seen.has(key)) return;
+    seen.add(key);
+    results.push({
+      id: el.id || key,
+      name: el.getAttribute("name") || "",
+      label: getLabel(el),
+      inputType: "text",
+      tag: el.tagName.toLowerCase(),
+      role: "combobox",
+      className: String(el.className || ""),
+      required: requiredOf(el),
+      selector: el.id ? "#" + CSS.escape(el.id) : '[role="combobox"]',
+      options: [],
+      autocomplete: (el.getAttribute("autocomplete") || "").toLowerCase(),
+    });
+  });
+  document.querySelectorAll("label").forEach((label) => {
+    const container = label.closest('[class*="field"], [class*="question"], [class*="Field"]') || label.parentElement;
+    if (!container) return;
+    const buttons = Array.from(container.querySelectorAll("button")).map((b) => (b.textContent || "").trim());
+    if (buttons.indexOf("Yes") >= 0 && buttons.indexOf("No") >= 0) {
+      const key = "yesno-" + String(label.textContent || "").trim().slice(0, 40);
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push({
+        id: label.htmlFor || key,
+        name: "",
+        label: String(label.textContent || "").trim(),
+        inputType: "yes-no-button",
+        tag: "button",
+        role: "",
+        className: "",
+        required: /\\*/.test(label.textContent || ""),
+        selector: "",
+        options: ["Yes", "No"],
+        autocomplete: "",
+      });
+    }
+  });
+  return results;
+})()`;
+
+export async function scanFormFields(page: Page): Promise<ScannedField[]> {
+  const raw = (await page.evaluate(SCAN_IN_PAGE)) as Array<{
+    id: string;
+    name: string;
+    label: string;
+    inputType: string;
+    tag: string;
+    role: string;
+    className: string;
+    required: boolean;
+    selector: string;
+    options: string[];
+    autocomplete: string;
+  }>;
 
   return raw
     .map((r) =>
