@@ -4,7 +4,7 @@ import { clickApplyIfPresent, uploadFirstMatching } from "./fields.js";
 import { scanPlanFill } from "./engine.js";
 
 async function fillObvious(ctx: AdapterContext): Promise<FieldOutcome[]> {
-  return scanPlanFill(ctx, { skipCheckbox: true });
+  return scanPlanFill(ctx, { skipCheckbox: true, ats: "custom" });
 }
 
 export const genericAdapter: AtsAdapter = {

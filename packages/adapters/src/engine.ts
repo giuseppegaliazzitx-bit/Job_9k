@@ -1,4 +1,4 @@
-import { lookupValue, pickClosestChoice } from "@job9k/core";
+import { applyOptionLearning, lookupValue, pickClosestChoice, rememberSnappedValue } from "@job9k/core";
 import {
   blockedOutcome,
   fillSelectOrDropdown,
@@ -16,6 +16,7 @@ import type { AdapterContext, FieldOutcome } from "./types.js";
 export interface FillScanOptions {
   skipCheckbox?: boolean;
   skipRadio?: boolean;
+  ats?: string;
 }
 
 function looksFilled(value: string): boolean {
@@ -100,7 +101,9 @@ export async function fillScannedFields(
     }
 
     const mapped = lookupValue(field.label || field.name || field.id, ctx.profile, ctx.answers);
-    const value = pickClosestChoice(mapped.value, field.options);
+    const learned = applyOptionLearning(field.label || field.id, mapped.value, opts.ats);
+    const snapped = pickClosestChoice(learned, field.options);
+    const value = rememberSnappedValue(field.label || field.id, mapped.value, snapped, opts.ats);
     const loc = field.type === "yes-no-button" ? null : await locate(ctx, field);
 
     if (!value) {
@@ -158,6 +161,7 @@ export async function verifyAndRetry(
   ctx: AdapterContext,
   fields: ScannedField[],
   outcomes: FieldOutcome[],
+  opts: FillScanOptions = {},
 ): Promise<FieldOutcome[]> {
   const byLabel = new Map(outcomes.map((o) => [o.label.toLowerCase(), o]));
   const retry: ScannedField[] = [];
@@ -168,7 +172,7 @@ export async function verifyAndRetry(
   }
   if (!retry.length) return outcomes;
   ctx.log(`Verification: retrying ${retry.length} empty field(s)`);
-  const again = await fillScannedFields(ctx, retry);
+  const again = await fillScannedFields(ctx, retry, opts);
   for (const o of again) {
     const idx = outcomes.findIndex((x) => x.label.toLowerCase() === o.label.toLowerCase());
     if (idx >= 0) outcomes[idx] = o;
@@ -181,5 +185,5 @@ export async function scanPlanFill(ctx: AdapterContext, opts: FillScanOptions = 
   const fields = await scanFormFields(ctx.page);
   ctx.log(`Scan: ${fields.length} fields`);
   const outcomes = await fillScannedFields(ctx, fields, opts);
-  return verifyAndRetry(ctx, fields, outcomes);
+  return verifyAndRetry(ctx, fields, outcomes, opts);
 }

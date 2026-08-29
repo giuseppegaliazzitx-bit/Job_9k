@@ -142,5 +142,8 @@ describe("knockout mapping", () => {
     expect(lookupValue("country Country*", withEdu, answers).value).toBe("US");
     expect(lookupValue("degree--0 Degree*", withEdu, answers).value).toBe("Bachelor of Science");
     expect(lookupValue("discipline--0 Discipline*", withEdu, answers).value).toBe("Computer Science");
+    expect(lookupValue("Graduation year", withEdu, answers).value).toBe("2020");
+    expect(lookupValue("Have you previously worked at this company?", withEdu, answers).value).toBe("No");
+    expect(lookupValue("Phone device type", withEdu, answers).value).toBe("Mobile");
   });
 });

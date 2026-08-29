@@ -57,7 +57,7 @@ export const ashbyAdapter: AtsAdapter = {
       ctx.onField(o);
     }
 
-    outcomes.push(...(await scanPlanFill(ctx)));
+    outcomes.push(...(await scanPlanFill(ctx, { ats: "ashby" })));
     return { outcomes, alreadyApplied: already };
   },
 };

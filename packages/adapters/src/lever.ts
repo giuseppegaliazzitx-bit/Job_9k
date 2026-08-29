@@ -63,7 +63,7 @@ export const leverAdapter: AtsAdapter = {
       ctx.onField(o);
     }
 
-    outcomes.push(...(await scanPlanFill(ctx, { skipCheckbox: true, skipRadio: true })));
+    outcomes.push(...(await scanPlanFill(ctx, { skipCheckbox: true, skipRadio: true, ats: "lever" })));
     ctx.log("Lever: left checkboxes and radios for you (hCaptcha).", "warn");
     return { outcomes, pauseReason: "Lever checkboxes/radios left for review" };
   },

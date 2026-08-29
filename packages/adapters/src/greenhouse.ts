@@ -121,7 +121,7 @@ export const greenhouseAdapter: AtsAdapter = {
       ctx.onField(o);
     }
 
-    outcomes.push(...(await scanPlanFill(ctx)));
+    outcomes.push(...(await scanPlanFill(ctx, { ats: "greenhouse" })));
 
     const rest = page.locator(
       "#application_form input:not([type='file']):not([type='hidden']):not([type='submit']), #application_form select, #application_form textarea, form select, [role='combobox']",
