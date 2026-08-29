@@ -5,8 +5,7 @@ import {
   blockedOutcome,
   clickApplyIfPresent,
   fieldDescriptor,
-  handleDropdown,
-  handleNativeSelect,
+  fillSelectOrDropdown,
   typeFill,
   uploadFirstMatching,
   waitIfPaused,
@@ -35,14 +34,14 @@ async function fillObvious(ctx: AdapterContext): Promise<FieldOutcome[]> {
     await waitIfPaused(ctx);
     const tag = await loc.evaluate((el) => el.tagName.toLowerCase());
     let ok = false;
-    if (tag === "select") ok = await handleNativeSelect(loc, mapped.value);
-    else if ((await loc.getAttribute("role")) === "combobox") ok = await handleDropdown(page, loc, mapped.value);
-    else {
+    if (tag === "select" || (await loc.getAttribute("role")) === "combobox") {
+      ok = await fillSelectOrDropdown(page, loc, mapped.value);
+    } else {
       try {
         await typeFill(loc, mapped.value, ctx.typingDelayMs);
         ok = true;
       } catch {
-        ok = false;
+        ok = await fillSelectOrDropdown(page, loc, mapped.value);
       }
     }
     const o: FieldOutcome = {

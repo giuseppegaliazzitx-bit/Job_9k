@@ -1,11 +1,13 @@
 import type { Locator, Page } from "playwright";
-import { fuzzyScore, lookupValue, mergeChoices, type AnswerBank, type Profile } from "@job9k/core";
+import { fuzzyScore, lookupValue, mergeChoices, pickClosestChoice, type AnswerBank, type Profile } from "@job9k/core";
 import type { AdapterContext, FieldOutcome } from "./types.js";
 
 const OPTION_SELECTORS = [
   ".select__option",
   '[role="option"]',
   ".select2-results__option",
+  '[class*="menu"] [class*="option"]',
+  '[class*="listbox"] [class*="option"]',
   "li[class*='option']",
   ".dropdown-item",
   "div[data-value]",
@@ -28,25 +30,28 @@ export async function typeFill(locator: Locator, value: string, delay: number): 
 }
 
 export async function fieldDescriptor(page: Page, loc: Locator): Promise<string> {
-  const parts: string[] = [];
-  const placeholder = await loc.getAttribute("placeholder");
-  const name = await loc.getAttribute("name");
   const id = await loc.getAttribute("id");
-  const aria = await loc.getAttribute("aria-label");
-  if (placeholder) parts.push(placeholder);
-  if (name) parts.push(name);
-  if (id) parts.push(id);
-  if (aria) parts.push(aria);
-  if (id) {
-    const label = await page.locator(`label[for="${id}"]`).first().textContent().catch(() => null);
-    if (label) parts.push(label);
+  const aria = ((await loc.getAttribute("aria-label")) ?? "").trim();
+  const labelledBy = await loc.getAttribute("aria-labelledby");
+  let labelledByText = "";
+  if (labelledBy) {
+    const firstId = labelledBy.trim().split(/\s+/)[0];
+    labelledByText = ((await page.locator(`[id="${firstId}"]`).first().textContent().catch(() => "")) ?? "").trim();
   }
-  const nearby = await loc.evaluate((el) => {
-    const lab = el.closest("label") || el.parentElement?.querySelector("label");
-    return lab?.textContent?.trim() ?? "";
-  }).catch(() => "");
-  if (nearby) parts.push(nearby);
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  let forLabel = "";
+  if (id) {
+    forLabel = ((await page.locator(`label[for="${id}"]`).first().textContent().catch(() => "")) ?? "").trim();
+  }
+  const nearby = await loc
+    .evaluate((el) => {
+      const lab = el.closest("label") || el.parentElement?.querySelector("label");
+      return lab?.textContent?.trim() ?? "";
+    })
+    .catch(() => "");
+  const placeholder = ((await loc.getAttribute("placeholder")) ?? "").trim();
+  const name = ((await loc.getAttribute("name")) ?? "").trim();
+  const human = forLabel || labelledByText || aria || nearby || placeholder || name || id || "";
+  return human.replace(/\s+/g, " ").trim();
 }
 
 function uniqueChoices(raw: string[]): string[] {
@@ -152,12 +157,14 @@ export async function blockedOutcome(
 }
 
 export async function handleNativeSelect(loc: Locator, value: string): Promise<boolean> {
+  const choices = await readNativeSelectChoices(loc);
+  const snapped = pickClosestChoice(value, choices);
   try {
-    await loc.selectOption({ label: value }, { timeout: 2000 });
+    await loc.selectOption({ label: snapped }, { timeout: 2000 });
     return true;
   } catch {
     try {
-      await loc.selectOption({ value }, { timeout: 1500 });
+      await loc.selectOption({ value: snapped }, { timeout: 1500 });
       return true;
     } catch {
       return false;
@@ -165,44 +172,138 @@ export async function handleNativeSelect(loc: Locator, value: string): Promise<b
   }
 }
 
-export async function handleDropdown(page: Page, loc: Locator, value: string): Promise<boolean> {
-  const tag = await loc.evaluate((el) => el.tagName.toLowerCase());
-  if (tag === "select") return handleNativeSelect(loc, value);
-
-  await loc.scrollIntoViewIfNeeded().catch(() => undefined);
-  await page.keyboard.press("Escape").catch(() => undefined);
-  await loc.click({ timeout: 4000 }).catch(() => undefined);
-  await sleep(250);
+export async function verifyDropdownFilled(loc: Locator): Promise<boolean> {
   try {
-    await loc.fill("");
-    await loc.pressSequentially(value.slice(0, 20), { delay: 40 });
+    const val = (await loc.inputValue()).trim();
+    if (val && !/^(select\.?\.?\.?)$/i.test(val)) return true;
   } catch {
-    // not a text input
+    /* not an input */
   }
-  await sleep(500);
+  return loc
+    .evaluate((el) => {
+      const root =
+        el.closest('[class*="container"]') || el.closest(".select") || el.closest(".field") || el.parentElement;
+      if (!root) return false;
+      const sv = root.querySelector(".select__single-value, [class*='singleValue']");
+      const text = sv?.textContent?.trim() ?? "";
+      if (text && !/^select/i.test(text)) return true;
+      const multi = root.querySelectorAll(".select__multi-value, [class*='multiValue']");
+      if (multi.length > 0) return true;
+      const ph = root.querySelector(".select__placeholder") as HTMLElement | null;
+      if (ph && !ph.offsetParent) return true;
+      if (el instanceof HTMLSelectElement) {
+        const opt = el.selectedOptions[0];
+        return Boolean(opt && opt.value && opt.text && !/^select/i.test(opt.text.trim()));
+      }
+      return false;
+    })
+    .catch(() => false);
+}
 
+async function bestVisibleOption(
+  page: Page,
+  value: string,
+): Promise<{ index: number; score: number } | null> {
   const options = page.locator(OPTION_SELECTORS);
-  const count = await options.count();
+  const count = Math.min(await options.count().catch(() => 0), 250);
   let bestIdx = -1;
   let best = 0;
   for (let i = 0; i < count; i++) {
     const opt = options.nth(i);
     if (!(await opt.isVisible().catch(() => false))) continue;
     const text = ((await opt.textContent()) ?? "").trim();
-    if (!text || text === "No options") continue;
+    if (!text || text === "No options" || text.length > 120) continue;
     const score = fuzzyScore(value, text);
     if (score > best) {
       best = score;
       bestIdx = i;
     }
   }
-  if (bestIdx >= 0 && best >= 0.3) {
-    await options.nth(bestIdx).click();
-    await sleep(300);
-    return true;
+  return bestIdx >= 0 && best >= 0.3 ? { index: bestIdx, score: best } : null;
+}
+
+export async function handleDropdown(page: Page, loc: Locator, value: string): Promise<boolean> {
+  const tag = await loc.evaluate((el) => el.tagName.toLowerCase());
+  if (tag === "select") return handleNativeSelect(loc, value);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await loc.scrollIntoViewIfNeeded().catch(() => undefined);
+      await page.keyboard.press("Escape").catch(() => undefined);
+      await sleep(200);
+      await loc.click({ timeout: 4000 });
+      await sleep(250);
+      try {
+        await loc.fill("");
+        await loc.pressSequentially(value.slice(0, 18), { delay: 50 });
+      } catch {
+        /* not a text input */
+      }
+      await sleep(400 * attempt);
+      const match = await bestVisibleOption(page, value);
+      if (match) {
+        await page.locator(OPTION_SELECTORS).nth(match.index).click();
+        await sleep(400);
+        if (await verifyDropdownFilled(loc)) return true;
+      }
+    } catch {
+      /* retry */
+    }
   }
+
+  try {
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await sleep(200);
+    await loc.scrollIntoViewIfNeeded().catch(() => undefined);
+    await loc.click({ timeout: 3000 });
+    await sleep(700);
+    const match = await bestVisibleOption(page, value);
+    if (match) {
+      await page.locator(OPTION_SELECTORS).nth(match.index).click();
+      await sleep(400);
+      if (await verifyDropdownFilled(loc)) return true;
+    }
+  } catch {
+    /* click-scan failed */
+  }
+
+  try {
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await sleep(150);
+    await loc.click({ timeout: 2500 });
+    await sleep(250);
+    for (let i = 0; i < 25; i++) {
+      await page.keyboard.press("ArrowDown");
+      await sleep(70);
+      const active = page.locator('.select__option--is-focused, [role="option"][aria-selected="true"]').first();
+      if ((await active.count()) === 0) continue;
+      const text = ((await active.textContent()) ?? "").trim();
+      if (fuzzyScore(value, text) >= 0.5) {
+        await page.keyboard.press("Enter");
+        await sleep(350);
+        if (await verifyDropdownFilled(loc)) return true;
+        break;
+      }
+    }
+  } catch {
+    /* keyboard nav failed */
+  }
+
   await page.keyboard.press("Escape").catch(() => undefined);
   return false;
+}
+
+export async function fillSelectOrDropdown(page: Page, loc: Locator, value: string): Promise<boolean> {
+  const tag = await loc.evaluate((el) => el.tagName.toLowerCase()).catch(() => "input");
+  const role = ((await loc.getAttribute("role")) ?? "").toLowerCase();
+  const aria = await loc.getAttribute("aria-haspopup");
+  if (tag === "select") return handleNativeSelect(loc, value);
+  if (role === "combobox" || aria === "listbox" || aria === "true") return handleDropdown(page, loc, value);
+  try {
+    return handleDropdown(page, loc, value);
+  } catch {
+    return false;
+  }
 }
 
 export async function uploadFirstMatching(
@@ -259,10 +360,8 @@ export async function fillByLookup(
     } catch {
       ok = false;
     }
-  } else if (kind === "select") {
-    ok = await handleNativeSelect(loc, mapped.value);
-  } else if (kind === "dropdown") {
-    ok = await handleDropdown(ctx.page, loc, mapped.value);
+  } else if (kind === "select" || kind === "dropdown") {
+    ok = await fillSelectOrDropdown(ctx.page, loc, mapped.value);
   } else if (kind === "yesno") {
     ok = await clickYesNo(ctx.page, loc, mapped.value);
   }

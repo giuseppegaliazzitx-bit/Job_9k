@@ -5,8 +5,7 @@ import {
   blockedOutcome,
   clickApplyIfPresent,
   fieldDescriptor,
-  handleDropdown,
-  handleNativeSelect,
+  fillSelectOrDropdown,
   readFieldChoices,
   SkipJobError,
   typeFill,
@@ -55,18 +54,18 @@ async function fillGreenhouseField(ctx: AdapterContext, loc: import("playwright"
     ctx.onField(o);
     return o;
   }
-  if (tag === "select") ok = await handleNativeSelect(loc, mapped.value);
+  if (tag === "select") ok = await fillSelectOrDropdown(ctx.page, loc, mapped.value);
   else {
     const role = await loc.getAttribute("role");
     const aria = await loc.getAttribute("aria-haspopup");
     if (role === "combobox" || aria === "listbox" || aria === "true") {
-      ok = await handleDropdown(ctx.page, loc, mapped.value);
+      ok = await fillSelectOrDropdown(ctx.page, loc, mapped.value);
     } else {
       try {
         await typeFill(loc, mapped.value, ctx.typingDelayMs);
         ok = true;
       } catch {
-        ok = await handleDropdown(ctx.page, loc, mapped.value);
+        ok = await fillSelectOrDropdown(ctx.page, loc, mapped.value);
       }
     }
   }

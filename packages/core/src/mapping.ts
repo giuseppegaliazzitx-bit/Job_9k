@@ -1,3 +1,4 @@
+import { cleanBlockedLabel } from "./labels.js";
 import type { AnswerBank, FieldConfidence, Profile } from "./types.js";
 import { KNOCKOUT_PATTERNS } from "./types.js";
 
@@ -32,6 +33,7 @@ const FIELD_GETTERS: Array<{ patterns: RegExp[]; get: Getter; knockout?: boolean
   { patterns: [/last[\s_-]*name/i, /surname/i, /family[\s_-]*name/i], get: (p) => p.identity.last_name },
   { patterns: [/full[\s_-]*name/i, /^name$/i], get: (p) => `${p.identity.first_name} ${p.identity.last_name}`.trim() },
   { patterns: [/e[\s_-]*mail/i], get: (p) => p.identity.email },
+  { patterns: [/phone[\s_-]*country/i, /country[\s_-]*phone/i, /dial[\s_-]*code/i], get: (p) => p.identity.phone_country },
   { patterns: [/phone/i, /mobile/i, /telephone/i, /cell/i], get: (p) => p.identity.phone },
   { patterns: [/linkedin/i], get: (p) => p.identity.linkedin },
   { patterns: [/github/i], get: (p) => p.identity.github },
@@ -39,7 +41,7 @@ const FIELD_GETTERS: Array<{ patterns: RegExp[]; get: Getter; knockout?: boolean
   { patterns: [/^city$/i], get: (p) => p.identity.city },
   { patterns: [/^state$/i, /province/i], get: (p) => p.identity.state },
   { patterns: [/zip/i, /postal/i], get: (p) => p.identity.postal_code },
-  { patterns: [/^country$/i], get: (p) => p.identity.country },
+  { patterns: [/^country$/i, /\bcountry\b/i], get: (p) => p.identity.country },
   { patterns: [/address[\s_-]*line[\s_-]*1/i, /^address$/i], get: (p) => p.identity.address_line1 || p.identity.location },
   { patterns: [/location/i], get: (p) => p.identity.location },
   { patterns: [/sponsor/i, /visa/i], get: (p) => p.identity.sponsorship_needed || p.work_auth.sponsorship_needed, knockout: true },
@@ -52,7 +54,8 @@ const FIELD_GETTERS: Array<{ patterns: RegExp[]; get: Getter; knockout?: boolean
   { patterns: [/current[\s_-]*(title|role|position)/i], get: (p) => p.experience.current_title },
   { patterns: [/university/i, /school/i, /college/i, /institution/i], get: (p) => p.education[0]?.school ?? "" },
   { patterns: [/degree/i], get: (p) => p.education[0]?.degree ?? "" },
-  { patterns: [/major/i, /field[\s_-]*of[\s_-]*study/i], get: (p) => p.education[0]?.major ?? "" },
+  { patterns: [/major/i, /discipline/i, /field[\s_-]*of[\s_-]*study/i], get: (p) => p.education[0]?.major ?? "" },
+  { patterns: [/\bgpa\b/i], get: (_p, a) => a.gpa ?? a.gpa_undergraduate ?? a["GPA (Undergraduate)"] ?? "" },
   { patterns: [/gender/i], get: (p) => p.eeo.gender },
   { patterns: [/hispanic|latino/i], get: (p) => p.eeo.hispanic_latino },
   { patterns: [/race|ethnicity/i], get: (p) => p.eeo.race },
@@ -65,7 +68,7 @@ const FIELD_GETTERS: Array<{ patterns: RegExp[]; get: Getter; knockout?: boolean
 
 export function lookupValue(label: string, profile: Profile, answers: AnswerBank): MappedValue {
   const knockout = isKnockoutLabel(label);
-  const cleaned = label.replace(/\*+/g, "").trim();
+  const cleaned = cleanBlockedLabel(label) || label.replace(/\*+/g, "").trim();
 
   for (const entry of FIELD_GETTERS) {
     if (entry.patterns.some((re) => re.test(cleaned))) {

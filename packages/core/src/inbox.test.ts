@@ -6,11 +6,10 @@ import yaml from "js-yaml";
 import {
   answerInboxItems,
   captureBlockedFields,
-  cleanBlockedLabel,
-  collapseRepeatedPhrase,
   dismissInboxItems,
   listPendingInbox,
 } from "./inbox.js";
+import { cleanBlockedLabel, collapseRepeatedPhrase } from "./labels.js";
 import { lookupValue } from "./mapping.js";
 import type { Profile } from "./types.js";
 

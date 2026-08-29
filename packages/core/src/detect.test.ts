@@ -133,4 +133,14 @@ describe("knockout mapping", () => {
     expect(mapped.value).toBe("No");
     expect(mapped.confidence).toBe("filled");
   });
+
+  it("maps noisy ATS labels to country and degree", () => {
+    const withEdu = {
+      ...profile,
+      education: [{ school: "State U", degree: "Bachelor of Science", major: "Computer Science", start: "2016", end: "2020" }],
+    };
+    expect(lookupValue("country Country*", withEdu, answers).value).toBe("US");
+    expect(lookupValue("degree--0 Degree*", withEdu, answers).value).toBe("Bachelor of Science");
+    expect(lookupValue("discipline--0 Discipline*", withEdu, answers).value).toBe("Computer Science");
+  });
 });

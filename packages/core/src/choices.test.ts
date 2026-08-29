@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeChoices, normalizeChoice } from "./choices.js";
+import { mergeChoices, normalizeChoice, pickClosestChoice } from "./choices.js";
 
 describe("normalizeChoice", () => {
   it("drops placeholders and empties", () => {
@@ -18,5 +18,15 @@ describe("mergeChoices", () => {
       "Job Board",
       "Referral",
     ]);
+  });
+});
+
+describe("pickClosestChoice", () => {
+  it("snaps profile values to the form's option text", () => {
+    expect(pickClosestChoice("United States", ["Canada", "United States of America", "Mexico"])).toBe(
+      "United States of America",
+    );
+    expect(pickClosestChoice("Job Boards", ["LinkedIn", "Indeed / Job Boards", "Other"])).toBe("Indeed / Job Boards");
+    expect(pickClosestChoice("LinkedIn", ["LinkedIn", "Other"])).toBe("LinkedIn");
   });
 });
