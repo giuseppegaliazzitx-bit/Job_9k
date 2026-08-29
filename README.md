@@ -89,12 +89,12 @@ Detection is URL first (`greenhouse.io`, `myworkdayjobs.com`, `lever.co`, `ashby
 
 | ATS | Fill | Auto-submit in v1 |
 | --- | --- | --- |
-| Greenhouse | One page, React select, resume, custom questions | Allowed only if all required fields mapped |
-| Lever | Text + dropdowns. Checkboxes/radios left for you (hCaptcha) | Allowed with the same required-field rule |
-| Ashby | Typeahead + yes/no. Warns if email already used | No |
-| Workday | Page-by-page. Stops on login / CAPTCHA / create-account | No |
-| Gem / iCIMS / SmartRecruiters | Best-effort identity + resume | No |
-| Custom | Obvious identity fields + resume, then pause. LLM agent if configured | No |
+| Greenhouse | Scan → map → fill → verify. React select, intl-tel, custom questions | Allowed only if all required fields mapped |
+| Lever | Same pipeline. Checkboxes/radios left for you (hCaptcha) | Allowed with the same required-field rule |
+| Ashby | Typeahead + yes/no buttons. Warns if email already used | No |
+| Workday | Login/create-account if credentials stored, then wizard. Stops before Submit | No |
+| Gem / iCIMS / SmartRecruiters | Same scan/fill/verify as generic (iCIMS and SmartRecruiters are still best-effort) | No |
+| Custom | Scan all standard inputs, then pause. LLM agent if configured | No |
 
 We drive the **public apply page**. We do not POST the Greenhouse Job Board API with a board token.
 

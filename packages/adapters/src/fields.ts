@@ -378,6 +378,81 @@ export async function fillByLookup(
   return outcome;
 }
 
+export async function handleTypeahead(page: Page, loc: Locator, value: string): Promise<boolean> {
+  await loc.scrollIntoViewIfNeeded().catch(() => undefined);
+  await loc.click({ timeout: 3000 }).catch(() => undefined);
+  await sleep(150);
+  try {
+    await loc.fill("");
+    await loc.pressSequentially(value, { delay: 40 });
+  } catch {
+    await loc.fill(value).catch(() => undefined);
+  }
+  await sleep(900);
+  const match = await bestVisibleOption(page, value);
+  if (match) {
+    await page.locator(OPTION_SELECTORS).nth(match.index).click();
+    await sleep(300);
+    return true;
+  }
+  const first = page.locator('[role="option"], [class*="suggestion"], [class*="autocomplete"] li').first();
+  if (await first.isVisible().catch(() => false)) {
+    await first.click().catch(() => undefined);
+    await sleep(250);
+    return true;
+  }
+  return Boolean((await loc.inputValue().catch(() => "")).trim());
+}
+
+export async function handlePhoneCountry(page: Page, loc: Locator, value: string): Promise<boolean> {
+  const flag = loc
+    .locator('xpath=ancestor::*[contains(@class,"iti")][1]//div[contains(@class,"iti__flag-container") or contains(@class,"iti__selected-flag")]')
+    .first();
+  const clickTarget = (await flag.count()) > 0 ? flag : loc;
+  await clickTarget.click({ timeout: 3000 }).catch(() => undefined);
+  await sleep(300);
+  const search = page.locator(".iti__search-input, input[aria-label='Search']").first();
+  if ((await search.count()) > 0 && (await search.isVisible().catch(() => false))) {
+    await search.fill(value).catch(() => undefined);
+    await sleep(400);
+  }
+  const opt = page.locator(`li[role="option"]:has-text("${value}"), .iti__country:has-text("${value}")`).first();
+  if ((await opt.count()) > 0 && (await opt.isVisible().catch(() => false))) {
+    await opt.click();
+    await sleep(250);
+    return true;
+  }
+  return handleDropdown(page, loc, value);
+}
+
+export async function handleYesNoButton(page: Page, label: string, value: string): Promise<boolean> {
+  const want = /^(yes|true|y)$/i.test(value.trim()) ? "Yes" : /^(no|false|n)$/i.test(value.trim()) ? "No" : value;
+  const clicked = await page.evaluate(
+    ({ labelText, targetValue }) => {
+      const labels = Array.from(document.querySelectorAll("label, p, h3, h4, span, legend"));
+      const target = labels.find((l) => {
+        const t = (l.textContent || "").trim();
+        return t.startsWith(labelText.slice(0, 40)) || (t.length < labelText.length + 40 && t.includes(labelText.slice(0, 30)));
+      });
+      if (!target) return false;
+      const container =
+        target.closest('[class*="field"], [class*="question"], [class*="Field"], [class*="Question"]') || target.parentElement;
+      if (!container) return false;
+      const buttons = container.querySelectorAll("button");
+      for (const btn of buttons) {
+        if ((btn.textContent || "").trim() === targetValue) {
+          (btn as HTMLButtonElement).click();
+          return true;
+        }
+      }
+      return false;
+    },
+    { labelText: label, targetValue: want },
+  );
+  if (clicked) return true;
+  return clickYesNo(page, page.locator(`text=${label.slice(0, 40)}`).first(), want);
+}
+
 export async function clickYesNo(page: Page, around: Locator, value: string): Promise<boolean> {
   const wantYes = /^(yes|true|y)$/i.test(value.trim());
   const root = around.locator("xpath=ancestor::*[self::div or self::fieldset or self::form][1]");

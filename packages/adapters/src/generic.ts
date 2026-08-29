@@ -1,59 +1,10 @@
 import type { Page } from "playwright";
-import { lookupValue } from "@job9k/core";
 import type { AdapterContext, AdapterResult, AtsAdapter, FieldOutcome } from "./types.js";
-import {
-  blockedOutcome,
-  clickApplyIfPresent,
-  fieldDescriptor,
-  fillSelectOrDropdown,
-  typeFill,
-  uploadFirstMatching,
-  waitIfPaused,
-} from "./fields.js";
+import { clickApplyIfPresent, uploadFirstMatching } from "./fields.js";
+import { scanPlanFill } from "./engine.js";
 
 async function fillObvious(ctx: AdapterContext): Promise<FieldOutcome[]> {
-  const { page } = ctx;
-  const outcomes: FieldOutcome[] = [];
-  const locators = page.locator(
-    'input[type="text"], input[type="email"], input[type="tel"], input[type="url"], input:not([type]), textarea, select, [role="combobox"]',
-  );
-  const n = await locators.count();
-  for (let i = 0; i < n; i++) {
-    const loc = locators.nth(i);
-    if (!(await loc.isVisible().catch(() => false))) continue;
-    const current = await loc.inputValue().catch(() => "");
-    if (current.trim()) continue;
-    const label = await fieldDescriptor(page, loc);
-    const mapped = lookupValue(label, ctx.profile, ctx.answers);
-    if (!mapped.value) {
-      const o = await blockedOutcome(page, loc, label, mapped.knockout);
-      outcomes.push(o);
-      ctx.onField(o);
-      continue;
-    }
-    await waitIfPaused(ctx);
-    const tag = await loc.evaluate((el) => el.tagName.toLowerCase());
-    let ok = false;
-    if (tag === "select" || (await loc.getAttribute("role")) === "combobox") {
-      ok = await fillSelectOrDropdown(page, loc, mapped.value);
-    } else {
-      try {
-        await typeFill(loc, mapped.value, ctx.typingDelayMs);
-        ok = true;
-      } catch {
-        ok = await fillSelectOrDropdown(page, loc, mapped.value);
-      }
-    }
-    const o: FieldOutcome = {
-      label,
-      value: mapped.value,
-      confidence: ok ? mapped.confidence : "blocked",
-      required: mapped.knockout,
-    };
-    outcomes.push(o);
-    ctx.onField(o);
-  }
-  return outcomes;
+  return scanPlanFill(ctx, { skipCheckbox: true });
 }
 
 export const genericAdapter: AtsAdapter = {

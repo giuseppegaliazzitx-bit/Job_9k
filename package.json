@@ -14,7 +14,7 @@
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @job9k/api\" \"npm run dev -w @job9k/web\"",
     "dev:api": "npm run dev -w @job9k/api",
     "dev:web": "npm run dev -w @job9k/web",
-    "test": "npm run test -w @job9k/core",
+    "test": "npm run test -w @job9k/core && npm run test -w @job9k/adapters",
     "build": "npm run build --workspaces --if-present",
     "postinstall": "npx playwright install chromium"
   },

@@ -1,7 +1,7 @@
 import type { Page } from "playwright";
-import { lookupValue } from "@job9k/core";
 import type { AdapterContext, AdapterResult, AtsAdapter, FieldOutcome } from "./types.js";
-import { fieldDescriptor, typeFill, uploadFirstMatching, waitIfPaused } from "./fields.js";
+import { typeFill, uploadFirstMatching, waitIfPaused } from "./fields.js";
+import { scanPlanFill } from "./engine.js";
 
 export const leverAdapter: AtsAdapter = {
   ats: "lever",
@@ -63,29 +63,7 @@ export const leverAdapter: AtsAdapter = {
       ctx.onField(o);
     }
 
-    // Text inputs / textareas only. Do not auto-click checkbox/radio — that can trip hCaptcha on Lever.
-    const extras = page.locator("input[type='text'], input[type='email'], input[type='tel'], input[type='url'], textarea");
-    const n = await extras.count();
-    for (let i = 0; i < n; i++) {
-      const loc = extras.nth(i);
-      if (!(await loc.isVisible().catch(() => false))) continue;
-      const current = await loc.inputValue().catch(() => "");
-      if (current.trim()) continue;
-      const label = await fieldDescriptor(page, loc);
-      const mapped = lookupValue(label, ctx.profile, ctx.answers);
-      if (!mapped.value || mapped.knockout && mapped.confidence === "blocked") {
-        const o: FieldOutcome = { label, value: "", confidence: "blocked", required: mapped.knockout };
-        outcomes.push(o);
-        ctx.onField(o);
-        continue;
-      }
-      await waitIfPaused(ctx);
-      await typeFill(loc, mapped.value, ctx.typingDelayMs).catch(() => undefined);
-      const o: FieldOutcome = { label, value: mapped.value, confidence: mapped.confidence, required: mapped.knockout };
-      outcomes.push(o);
-      ctx.onField(o);
-    }
-
+    outcomes.push(...(await scanPlanFill(ctx, { skipCheckbox: true, skipRadio: true })));
     ctx.log("Lever: left checkboxes and radios for you (hCaptcha).", "warn");
     return { outcomes, pauseReason: "Lever checkboxes/radios left for review" };
   },

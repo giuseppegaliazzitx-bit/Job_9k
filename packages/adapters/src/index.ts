@@ -1,5 +1,7 @@
 export * from "./types.js";
 export * from "./fields.js";
+export * from "./scan.js";
+export * from "./engine.js";
 export * from "./registry.js";
 export { greenhouseAdapter } from "./greenhouse.js";
 export { leverAdapter } from "./lever.js";

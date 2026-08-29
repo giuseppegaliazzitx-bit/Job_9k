@@ -1,16 +1,7 @@
 import type { Page } from "playwright";
-import { lookupValue } from "@job9k/core";
 import type { AdapterContext, AdapterResult, AtsAdapter, FieldOutcome } from "./types.js";
-import {
-  clickApplyIfPresent,
-  clickYesNo,
-  fieldDescriptor,
-  handleDropdown,
-  SkipJobError,
-  typeFill,
-  uploadFirstMatching,
-  waitIfPaused,
-} from "./fields.js";
+import { clickApplyIfPresent, typeFill, uploadFirstMatching, waitIfPaused } from "./fields.js";
+import { scanPlanFill } from "./engine.js";
 
 export const ashbyAdapter: AtsAdapter = {
   ats: "ashby",
@@ -66,49 +57,7 @@ export const ashbyAdapter: AtsAdapter = {
       ctx.onField(o);
     }
 
-    // Yes/No buttons next to knockout questions
-    const labels = page.locator("label, p, h3, span");
-    const count = Math.min(await labels.count(), 80);
-    for (let i = 0; i < count; i++) {
-      const text = ((await labels.nth(i).textContent()) ?? "").trim();
-      if (text.length < 8 || text.length > 180) continue;
-      const mapped = lookupValue(text, ctx.profile, ctx.answers);
-      if (!mapped.knockout && !/sponsor|authorized|relocat/i.test(text)) continue;
-      if (!mapped.value) {
-        if (mapped.knockout) {
-          const decision = await ctx.onUnknownQuestion(text, "");
-          if (decision === "skip-job") throw new SkipJobError(text);
-          if (decision !== "leave") mapped.value = decision.value;
-        }
-      }
-      if (!mapped.value) {
-        const o: FieldOutcome = { label: text, value: "", confidence: "blocked", required: mapped.knockout };
-        outcomes.push(o);
-        ctx.onField(o);
-        continue;
-      }
-      const ok = await clickYesNo(page, labels.nth(i), mapped.value);
-      const o: FieldOutcome = { label: text, value: mapped.value, confidence: ok ? "filled" : "blocked", required: mapped.knockout };
-      outcomes.push(o);
-      ctx.onField(o);
-    }
-
-    const combos = page.locator('[role="combobox"], input[aria-autocomplete="list"]');
-    const cn = await combos.count();
-    for (let i = 0; i < cn; i++) {
-      const loc = combos.nth(i);
-      const current = await loc.inputValue().catch(() => "");
-      if (current.trim()) continue;
-      const label = await fieldDescriptor(page, loc);
-      const mapped = lookupValue(label, ctx.profile, ctx.answers);
-      if (!mapped.value) continue;
-      await waitIfPaused(ctx);
-      const ok = await handleDropdown(page, loc, mapped.value);
-      const o: FieldOutcome = { label, value: mapped.value, confidence: ok ? mapped.confidence : "blocked", required: mapped.knockout };
-      outcomes.push(o);
-      ctx.onField(o);
-    }
-
+    outcomes.push(...(await scanPlanFill(ctx)));
     return { outcomes, alreadyApplied: already };
   },
 };
