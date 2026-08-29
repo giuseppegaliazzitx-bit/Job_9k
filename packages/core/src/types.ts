@@ -143,6 +143,20 @@ export interface Profile {
 
 export type AnswerBank = Record<string, string>;
 
+export interface OtpSettings {
+  enabled: boolean;
+  email: string;
+  app_password: string;
+  host: string;
+  port: number;
+  max_wait_sec: number;
+}
+
+export interface AccountCredentials {
+  email: string;
+  password: string;
+}
+
 export interface Settings {
   browser: {
     headed: boolean;
@@ -158,6 +172,10 @@ export interface Settings {
     base_url: string;
     model: string;
     api_key_env: string;
+  };
+  otp: OtpSettings;
+  accounts: {
+    workday: AccountCredentials;
   };
   data_dir: string;
 }

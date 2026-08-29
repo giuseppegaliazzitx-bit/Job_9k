@@ -11,6 +11,7 @@ import {
   loadProfile,
   loadSettings,
   logFromMaps,
+  otpConfigured,
   replaceFieldMaps,
   resolveMaybeRelative,
   updateJob,
@@ -22,6 +23,7 @@ import { resolveAdapter, SkipJobError, extractPageMeta, type FieldOutcome } from
 import { newPage } from "./browser.js";
 import { emit } from "./events.js";
 import { draftUnknownAnswer, llmEnabled, planUnknownForm, summarizeJd } from "./llm.js";
+import { handleOtpOnPage, pollGmailOtp } from "./otp.js";
 
 export interface ActiveRun {
   jobId: string;
@@ -164,6 +166,14 @@ async function runJobNow(jobId: string, opts: { autoSubmit?: boolean } = {}): Pr
         });
       },
       log: (message: string, level: "info" | "warn" | "error" = "info") => log(job, message, level),
+      accounts: {
+        workday: {
+          email: settings.accounts.workday.email || profile.identity.email,
+          password: settings.accounts.workday.password,
+        },
+      },
+      waitForOtp: (sinceTimestamp?: number) =>
+        pollGmailOtp(settings, sinceTimestamp, (elapsed) => log(job, `Waiting for verification email (${elapsed}s)`)),
     };
 
     if (run.takeover) throw new Error("Take over");
@@ -179,6 +189,16 @@ async function runJobNow(jobId: string, opts: { autoSubmit?: boolean } = {}): Pr
     }
 
     persistMaps(job.id, result.outcomes);
+
+    const otpStatus = await handleOtpOnPage(page, settings, {
+      typingDelayMs: settings.browser.typing_delay_ms,
+      log: (m) => log(job, m),
+    });
+    if (otpStatus === "entered") result.loginOrCaptcha = false;
+    if (otpConfigured(settings) === false && otpStatus === "prompt-no-code") {
+      log(job, "Enable OTP in Settings if you want codes pulled from Gmail automatically.", "warn");
+    }
+
     const shot = await screenshot(page, job, dataDir, "filled");
 
     const blockedRequired = result.outcomes.filter((o) => o.required && o.confidence === "blocked");
@@ -199,6 +219,13 @@ async function runJobNow(jobId: string, opts: { autoSubmit?: boolean } = {}): Pr
       status = ok ? "submitted" : "review";
       note = ok ? "Submitted (allowlisted ATS, all required fields mapped)." : "Submit click failed; review in browser.";
       await screenshot(page, job, dataDir, ok ? "submitted" : "submit-failed");
+      if (ok) {
+        await handleOtpOnPage(page, settings, {
+          sinceTimestamp: Date.now(),
+          typingDelayMs: settings.browser.typing_delay_ms,
+          log: (m) => log(job, m),
+        });
+      }
     }
 
     if (run.takeover) {

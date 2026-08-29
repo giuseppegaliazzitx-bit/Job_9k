@@ -20,6 +20,8 @@ export interface AdapterContext {
   onField: (field: FieldOutcome) => void;
   onUnknownQuestion: (question: string, draft: string) => Promise<"skip-job" | { value: string } | "leave">;
   log: (message: string, level?: "info" | "warn" | "error") => void;
+  accounts?: { workday?: { email: string; password: string } };
+  waitForOtp?: (sinceTimestamp?: number) => Promise<string | null>;
 }
 
 export interface AdapterResult {

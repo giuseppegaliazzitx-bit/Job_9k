@@ -597,27 +597,120 @@ function AnswersPage() {
 function SettingsPage() {
   const [raw, setRaw] = useState("");
   const [msg, setMsg] = useState("");
+  const [otpEnabled, setOtpEnabled] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpPassword, setOtpPassword] = useState("");
+  const [wdEmail, setWdEmail] = useState("");
+  const [wdPassword, setWdPassword] = useState("");
+
   useEffect(() => {
-    void api.settings().then((p) => setRaw(JSON.stringify(p, null, 2)));
+    void api.settings().then((p) => {
+      const s = p as {
+        otp?: { enabled?: boolean; email?: string; app_password?: string };
+        accounts?: { workday?: { email?: string; password?: string } };
+      };
+      setOtpEnabled(Boolean(s.otp?.enabled));
+      setOtpEmail(s.otp?.email ?? "");
+      setOtpPassword(s.otp?.app_password ?? "");
+      setWdEmail(s.accounts?.workday?.email ?? "");
+      setWdPassword(s.accounts?.workday?.password ?? "");
+      const copy = { ...s };
+      setRaw(JSON.stringify(copy, null, 2));
+    });
   }, []);
+
+  function save() {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      void api
+        .saveSettings({
+          ...parsed,
+          otp: {
+            ...((parsed.otp as object) ?? {}),
+            enabled: otpEnabled,
+            email: otpEmail,
+            app_password: otpPassword,
+          },
+          accounts: {
+            workday: { email: wdEmail, password: wdPassword },
+          },
+        })
+        .then((saved) => {
+          setRaw(JSON.stringify(saved, null, 2));
+          const s = saved as { otp?: { app_password?: string }; accounts?: { workday?: { password?: string } } };
+          setOtpPassword(s.otp?.app_password ?? "");
+          setWdPassword(s.accounts?.workday?.password ?? "");
+          setMsg("Saved");
+        });
+    } catch {
+      setMsg("Invalid JSON");
+    }
+  }
+
   return (
     <div className="page">
       <h1>Settings</h1>
       <p className="muted">
-        Headed browser is default. Auto-submit is off globally. LLM provider none | openai-compatible | anthropic. OpenAI-compatible defaults to SpaceXAI (api.x.ai, grok-4.6).
+        Auto-submit stays off. Credentials stay on this machine in data/settings.yml (gitignored). API responses mask
+        passwords as ********.
       </p>
-      <textarea style={{ width: "100%", minHeight: 360, background: "#14181e", border: "1px solid #1f2630", borderRadius: 8, padding: 12 }} value={raw} onChange={(e) => setRaw(e.target.value)} />
+
+      <div className="card">
+        <h2>Gmail OTP</h2>
+        <p className="muted">
+          For Workday login / create-account codes. Use a Gmail App Password, not your normal password. Generate one at
+          myaccount.google.com/apppasswords.
+        </p>
+        <label className="toggle" style={{ margin: "8px 0 12px" }}>
+          <input type="checkbox" checked={otpEnabled} onChange={(e) => setOtpEnabled(e.target.checked)} />
+          Pull verification codes from Gmail
+        </label>
+        <div className="grid">
+          <div className="field">
+            <label>Gmail address</label>
+            <input value={otpEmail} onChange={(e) => setOtpEmail(e.target.value)} autoComplete="off" />
+          </div>
+          <div className="field">
+            <label>App password</label>
+            <input
+              type="password"
+              value={otpPassword}
+              onChange={(e) => setOtpPassword(e.target.value)}
+              placeholder="leave ******** to keep"
+              autoComplete="new-password"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Workday account</h2>
+        <p className="muted">Used to sign in or create an account, then the fill continues. Leave blank to pause for you.</p>
+        <div className="grid">
+          <div className="field">
+            <label>Workday email</label>
+            <input value={wdEmail} onChange={(e) => setWdEmail(e.target.value)} autoComplete="off" />
+          </div>
+          <div className="field">
+            <label>Workday password</label>
+            <input
+              type="password"
+              value={wdPassword}
+              onChange={(e) => setWdPassword(e.target.value)}
+              placeholder="leave ******** to keep"
+              autoComplete="new-password"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Advanced</h2>
+        <p className="muted">Browser, LLM, auto-submit allowlist. Auto-submit enabled: false unless you change it here.</p>
+        <textarea style={{ width: "100%", minHeight: 280, background: "#14181e", border: "1px solid #1f2630", borderRadius: 8, padding: 12 }} value={raw} onChange={(e) => setRaw(e.target.value)} />
+      </div>
       <div style={{ marginTop: 10 }}>
-        <button
-          className="btn primary"
-          onClick={() => {
-            try {
-              void api.saveSettings(JSON.parse(raw)).then(() => setMsg("Saved"));
-            } catch {
-              setMsg("Invalid JSON");
-            }
-          }}
-        >
+        <button className="btn primary" onClick={save}>
           Save
         </button>
         <span className="muted" style={{ marginLeft: 8 }}>

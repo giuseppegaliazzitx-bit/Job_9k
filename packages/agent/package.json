@@ -9,6 +9,7 @@
   "dependencies": {
     "@job9k/adapters": "*",
     "@job9k/core": "*",
+    "imapflow": "^1.7.6",
     "openai": "^5.12.2",
     "playwright": "^1.52.0"
   },

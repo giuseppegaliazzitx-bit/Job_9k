@@ -46,6 +46,15 @@ API: http://localhost:8787
 
 Chromium is installed via Playwright on `npm install`. Headed mode is the default.
 
+### Optional: Gmail OTP + Workday login
+
+In **Settings** (or `data/settings.yml`):
+
+1. Enable OTP and paste a [Gmail App Password](https://myaccount.google.com/apppasswords) (not your normal Gmail password).
+2. Store Workday email + password if you want the fill to sign in or create an account instead of pausing.
+
+Codes are pulled over IMAP (`imap.gmail.com`) and typed into the open browser. Auto-submit stays **off** unless you turn it on.
+
 ## Daily use
 
 1. Fill Profile and Answer bank.
@@ -131,7 +140,7 @@ Fixture URLs (headed dry-run only): `data/fixtures/urls.txt`
 
 ## Out of scope (v1)
 
-LinkedIn Easy Apply, Indeed/ZipRecruiter hunting, cloud sync, captcha-solving services, mass unattended submit, email inbox scraping.
+LinkedIn Easy Apply, Indeed/ZipRecruiter hunting, cloud sync, captcha-solving services, mass unattended submit.
 
 ## License
 

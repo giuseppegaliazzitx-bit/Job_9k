@@ -4,6 +4,8 @@ import yaml from "js-yaml";
 import type { AnswerBank, Profile, Settings } from "./types.js";
 import { getDataDir, getRepoRoot, resolveData } from "./paths.js";
 
+export const SECRET_PLACEHOLDER = "********";
+
 const DEFAULT_SETTINGS: Settings = {
   browser: { headed: true, slow_mo_ms: 50, typing_delay_ms: 40 },
   auto_submit: { enabled: false, allowlist: ["greenhouse", "lever"] },
@@ -12,6 +14,17 @@ const DEFAULT_SETTINGS: Settings = {
     base_url: "https://api.x.ai/v1",
     model: "grok-4.6",
     api_key_env: "XAI_API_KEY",
+  },
+  otp: {
+    enabled: false,
+    email: "",
+    app_password: "",
+    host: "imap.gmail.com",
+    port: 993,
+    max_wait_sec: 90,
+  },
+  accounts: {
+    workday: { email: "", password: "" },
   },
   data_dir: "./data",
 };
@@ -52,25 +65,81 @@ export function saveAnswers(answers: AnswerBank, dataDir = getDataDir()): void {
   writeFileSync(path, yaml.dump(answers, { lineWidth: 100 }), "utf8");
 }
 
+function isSecretPlaceholder(value: unknown): boolean {
+  const v = String(value ?? "").trim();
+  return !v || v === SECRET_PLACEHOLDER;
+}
+
+export function normalizeSettings(raw: Partial<Settings> | null | undefined): Settings {
+  const r = raw ?? {};
+  return {
+    browser: { ...DEFAULT_SETTINGS.browser, ...(r.browser ?? {}) },
+    auto_submit: {
+      enabled: r.auto_submit?.enabled ?? false,
+      allowlist: r.auto_submit?.allowlist ?? DEFAULT_SETTINGS.auto_submit.allowlist,
+    },
+    llm: { ...DEFAULT_SETTINGS.llm, ...(r.llm ?? {}) },
+    otp: {
+      enabled: Boolean(r.otp?.enabled),
+      email: r.otp?.email ?? "",
+      app_password: r.otp?.app_password ?? "",
+      host: r.otp?.host || DEFAULT_SETTINGS.otp.host,
+      port: Number(r.otp?.port) || DEFAULT_SETTINGS.otp.port,
+      max_wait_sec: Number(r.otp?.max_wait_sec) || DEFAULT_SETTINGS.otp.max_wait_sec,
+    },
+    accounts: {
+      workday: {
+        email: r.accounts?.workday?.email ?? "",
+        password: r.accounts?.workday?.password ?? "",
+      },
+    },
+    data_dir: r.data_dir ?? DEFAULT_SETTINGS.data_dir,
+  };
+}
+
 export function loadSettings(dataDir = getDataDir()): Settings {
   const path = resolveData(dataDir, "settings.yml");
   ensureFromExample(path, "data/settings.example.yml");
-  if (!existsSync(path)) return { ...DEFAULT_SETTINGS };
+  if (!existsSync(path)) return { ...DEFAULT_SETTINGS, otp: { ...DEFAULT_SETTINGS.otp }, accounts: { workday: { ...DEFAULT_SETTINGS.accounts.workday } } };
   const raw = (yaml.load(readFileSync(path, "utf8")) as Partial<Settings>) ?? {};
-  return {
-    browser: { ...DEFAULT_SETTINGS.browser, ...(raw.browser ?? {}) },
-    auto_submit: {
-      enabled: raw.auto_submit?.enabled ?? false,
-      allowlist: raw.auto_submit?.allowlist ?? DEFAULT_SETTINGS.auto_submit.allowlist,
+  return normalizeSettings(raw);
+}
+
+export function mergeSettings(current: Settings, incoming: Partial<Settings>): Settings {
+  const next = normalizeSettings({
+    ...current,
+    ...incoming,
+    browser: { ...current.browser, ...(incoming.browser ?? {}) },
+    auto_submit: { ...current.auto_submit, ...(incoming.auto_submit ?? {}) },
+    llm: { ...current.llm, ...(incoming.llm ?? {}) },
+    otp: { ...current.otp, ...(incoming.otp ?? {}) },
+    accounts: {
+      workday: { ...current.accounts.workday, ...(incoming.accounts?.workday ?? {}) },
     },
-    llm: { ...DEFAULT_SETTINGS.llm, ...(raw.llm ?? {}) },
-    data_dir: raw.data_dir ?? DEFAULT_SETTINGS.data_dir,
-  };
+  });
+  if (incoming.otp && isSecretPlaceholder(incoming.otp.app_password)) {
+    next.otp.app_password = current.otp.app_password;
+  }
+  if (incoming.accounts?.workday && isSecretPlaceholder(incoming.accounts.workday.password)) {
+    next.accounts.workday.password = current.accounts.workday.password;
+  }
+  return next;
+}
+
+export function redactSettings(settings: Settings): Settings {
+  const out = normalizeSettings(settings);
+  if (out.otp.app_password) out.otp.app_password = SECRET_PLACEHOLDER;
+  if (out.accounts.workday.password) out.accounts.workday.password = SECRET_PLACEHOLDER;
+  return out;
 }
 
 export function saveSettings(settings: Settings, dataDir = getDataDir()): void {
   const path = resolveData(dataDir, "settings.yml");
-  writeFileSync(path, yaml.dump(settings, { lineWidth: 100 }), "utf8");
+  writeFileSync(path, yaml.dump(normalizeSettings(settings), { lineWidth: 100 }), "utf8");
+}
+
+export function otpConfigured(settings: Settings): boolean {
+  return Boolean(settings.otp.enabled && settings.otp.email.trim() && settings.otp.app_password.trim());
 }
 
 export function fullName(profile: Profile): string {

@@ -21,8 +21,10 @@ import {
   loadAnswers,
   loadProfile,
   loadSettings,
+  mergeSettings,
   nextQueuedJob,
   parsePastedUrls,
+  redactSettings,
   saveAnswers,
   saveProfile,
   saveSettings,
@@ -184,12 +186,13 @@ app.put("/api/answers", (req, res) => {
 });
 
 app.get("/api/settings", (_req, res) => {
-  res.json(loadSettings());
+  res.json(redactSettings(loadSettings()));
 });
 
 app.put("/api/settings", (req, res) => {
-  saveSettings(req.body);
-  res.json(loadSettings());
+  const merged = mergeSettings(loadSettings(), req.body ?? {});
+  saveSettings(merged);
+  res.json(redactSettings(loadSettings()));
 });
 
 app.post("/api/files", upload.single("file"), (req, res) => {
